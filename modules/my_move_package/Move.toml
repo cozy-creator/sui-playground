@@ -1,0 +1,9 @@
+[package]
+name = "PaulsAmazingFirstPackage"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../sui-repo/crates/sui-framework" }
+
+[addresses]
+pauls_package = "0x0"

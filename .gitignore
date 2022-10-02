@@ -1,0 +1,4 @@
+.env
+sui.log.**
+**.key
+**/build

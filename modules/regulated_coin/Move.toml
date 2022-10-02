@@ -1,0 +1,12 @@
+[package]
+name = "sui-playground"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "df05544fb0cbd6d6db016e71e5facb5e7cc27988" }
+
+[addresses]
+sui_playground =  "0x0"
+rc = "0x0"
+abc = "0x0"
+

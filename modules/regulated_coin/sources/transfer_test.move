@@ -3,16 +3,23 @@ module sui_playground::thingy {
     use sui::object::{Self, UID};
     use sui::transfer;
 
-    /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
-    /// with all the other Coins and methods, as well as the `creator` field, which
-    /// can be used for additional security/regulation implementations.
-    struct Thingy has key, store {
+    struct KeyStore has key, store {
         id: UID,
         number: u64
     }
 
-    public entry fun create(ctx: &mut TxContext) {
-        let thingy = Thingy {
+    struct Key has key {
+        id: UID,
+        number: u64
+    }
+
+    struct Store has store {
+        id: UID,
+        number: u64
+    }
+
+    public entry fun create_keystore(ctx: &mut TxContext) {
+        let thingy = KeyStore {
             id: object::new(ctx),
             number: 16
         };
@@ -20,8 +27,32 @@ module sui_playground::thingy {
         transfer::transfer(thingy, tx_context::sender(ctx));
     }
 
-    public fun read_number(thingy: &Thingy, _ctx: &TxContext): u64 {
-        thingy.number
+    public entry fun create_key(ctx: &mut TxContext) {
+        let thingy = Key {
+            id: object::new(ctx),
+            number: 0
+        };
+
+        transfer::transfer(thingy, tx_context::sender(ctx));
+    }
+
+    // Polymorphic transfer works ONLY for objects with the KEY property
+
+    // public entry fun create_store(ctx: &mut TxContext) {
+    //     let thingy = Store {
+    //         id: object::new(ctx),
+    //         number: 99
+    //     };
+
+    //     transfer::transfer(thingy, tx_context::sender(ctx));
+    // }
+
+    public fun read_key(key: &Key): u64 {
+        key.number
+    }
+
+    public fun read_keystore(key_store: &KeyStore): u64 {
+        key_store.number
     }
 
     // fun init(ctx: &mut TxContext) {
@@ -36,18 +67,24 @@ module sui_playground::thingy {
 
 module sui_playground::moveit {
     use sui::transfer;
-    use sui_playground::thingy::Thingy;
+    use sui_playground::thingy::{KeyStore};
     use sui::tx_context::TxContext;
 
-    public entry fun transfer_it(thingy: Thingy, recipient: address, _ctx: &mut TxContext) {
+    public entry fun transfer_keystore(thingy: KeyStore, recipient: address, _ctx: &mut TxContext) {
         transfer::transfer(thingy, recipient);
     }
+
+    // NOTE: this code will NOT compile. This transfer is NOT allowed
+
+    // public entry fun transfer_key(thingy: Key, recipient: address, _ctx: &mut TxContext) {
+    //     transfer::transfer(thingy, recipient);
+    // }
 }
 
 #[test_only]
 module sui_playground::test_it {
     use sui_playground::moveit;
-    use sui_playground::thingy::{Thingy, create, read_number};
+    use sui_playground::thingy::{KeyStore, create_keystore, read_keystore};
     use sui::test_scenario;
 
     #[test]
@@ -59,26 +96,22 @@ module sui_playground::test_it {
         let scenario = &mut test_scenario::begin(&initial_owner);
         {
             // create the item and transfer it to initial owner
-            create(test_scenario::ctx(scenario));
+            create_keystore(test_scenario::ctx(scenario));
         };
 
         // second transaction executed by the initial owner
         test_scenario::next_tx(scenario, &initial_owner);
         {
-            // extract the sword owned by the initial owner
-            let thingy = test_scenario::take_owned<Thingy>(scenario);
-            moveit::transfer_it(thingy, final_owner, test_scenario::ctx(scenario));
+            let key = test_scenario::take_owned<KeyStore>(scenario);
+            moveit::transfer_keystore(key, final_owner, test_scenario::ctx(scenario));
         };
 
-        // third transaction executed by the final sword owner
+        // third transaction executed by the final owner
         test_scenario::next_tx(scenario, &final_owner);
         {
-            // extract the sword owned by the final owner
-            let thingy = test_scenario::take_owned<Thingy>(scenario);
-            // verify that the sword has expected properties
-            assert!(read_number(&thingy, test_scenario::ctx(scenario)) == 16, 1);
-            // return the sword to the object pool (it cannot be simply "dropped")
-            test_scenario::return_owned(scenario, thingy);
+            let key = test_scenario::take_owned<KeyStore>(scenario);
+            assert!(read_keystore(&key) == 16, 1);
+            test_scenario::return_owned(scenario, key);
         }
     }
 }

@@ -1,0 +1,36 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_batchTransaction",
+  "params": [
+    "0x94501bf9ba83f8c8467b820bd5e38183d2aca15c",
+    [
+      {
+        "moveCallRequestParams": {
+          "packageObjectId": "0x1c273aad9d65a09f83f147f107eb349bcf8613fc",
+          "module": "gas_benchmark",
+          "function": "edit_owned",
+          "typeArguments": [],
+          "arguments": [
+            "0x7fc1673517982f8cfc86e7eda4fcc8062bfa6a73",
+            "Using CURL and RPC to modify this bro"
+          ]
+        }
+      },
+      {
+        "moveCallRequestParams": {
+          "packageObjectId": "0x1c273aad9d65a09f83f147f107eb349bcf8613fc",
+          "module": "gas_benchmark",
+          "function": "edit_owned",
+          "typeArguments": [],
+          "arguments": [
+            "0xe9425674d6eb7b6c779c32459a80325995abdc16",
+            "Editing this as well buddy, RPC batch for the world!"
+          ]
+        }
+      }
+    ],
+    "0x5f72138198f1e5706938a9e90588bf4264de2f73",
+    2000
+  ]
+}

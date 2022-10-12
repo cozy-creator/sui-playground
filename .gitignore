@@ -2,3 +2,4 @@
 sui.log.**
 **.key
 **/build
+node_modules

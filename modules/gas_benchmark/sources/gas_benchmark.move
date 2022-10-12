@@ -41,4 +41,13 @@ module openrails::gas_benchmark {
         let data = string::utf8(data_raw);
         shared_struct.data = data
     }
+
+    public entry fun failure() {
+        assert!(false, 0);
+    }
+
+    public fun not_entry() {
+        // does nothing
+        assert!(true, 0);
+    }
 }

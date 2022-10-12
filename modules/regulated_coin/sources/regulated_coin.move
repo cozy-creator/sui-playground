@@ -566,7 +566,7 @@ module abc::tests {
         }
     }
 
-        // Banned User1 fails to create a Transfer.
+    // Banned User1 fails to create a Transfer.
     fun test_transfer_anyway_(test: &mut Scenario) {
         use sui::transfer::transfer;
 

@@ -42,7 +42,10 @@ module openrails::nft_standard {
     }
 
     struct BuyOffer<phantom C, phantom T> has key, store {
-        id: UID
+        id: UID,
+        send_to: address,
+        for: option::Option<ID>,
+        offer: Coin<C>
     }
 
     struct Loan<phantom T> has key, store {
@@ -69,11 +72,6 @@ module openrails::nft_standard {
     // or change them. Only one will ever exist per `T`
     struct RoyaltyCap<phantom T> has key, store {
         id: UID
-    }
-
-    struct AddressAmount<phantom C> has copy, drop {
-        addr: address,
-        amount: u64
     }
 
     // === Events ===
@@ -162,7 +160,7 @@ module openrails::nft_standard {
 
     // === User Functions, for NFT Holders ===
 
-    public entry fun sell_nft_<C, T>(price: u64, nft: &mut NFT<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+    public entry fun create_sell_offer_<C, T>(price: u64, nft: &mut NFT<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         // Assert that the owner of this NFT is sending this tx
         assert!(is_owner(tx_context::sender(ctx), nft), ENOT_OWNER);
         // Assert that the transfer cap still exists within the NFT
@@ -170,10 +168,10 @@ module openrails::nft_standard {
 
         let transfer_cap = option::extract(&mut nft.transfer_cap);
         let pay_to = tx_context::sender(ctx);
-        sell_nft<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
+        create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }
 
-    public entry fun sell_nft<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+    public entry fun create_sell_offer<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         let for_sale = SellOffer<C, T> {
             id: object::new(ctx),
             pay_to,
@@ -190,7 +188,7 @@ module openrails::nft_standard {
     // Once Sui supports passing shared objects by value, rather than just reference, this function
     // will change to consume the shared SellOffer wrapper, and delete it.
     // Note that the new_owner does not necessarily have to be the sender of the transaction
-    public entry fun buy_nft_<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, nft: &mut NFT<T>, ctx: &mut TxContext) {
+    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, nft: &mut NFT<T>, ctx: &mut TxContext) {
         assert!(option::is_some(&for_sale.transfer_cap), ENO_TRANSFER_PERMISSION);
 
         let buyer_royalty = ((for_sale.price as u128) * (royalty.fee_bps as u128) / 10000 / 2 as u64);
@@ -220,12 +218,28 @@ module openrails::nft_standard {
         claim_with_transfer_cap(new_owner, nft, transfer_cap);
     }
 
-    public fun claim_with_transfer_cap<T>(new_owner: address, nft: &mut NFT<T>, transfer_cap: TransferCap<T>) {
+    // In the future, this will delete the SellOffer
+    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, nft: &mut NFT<T>, ctx: &TxContext) {
+        let addr = tx_context::sender(ctx);
+        assert!(addr == *option::borrow(&nft.owner), ENOT_OWNER);
+
+        let transfer_cap = option::extract(&mut for_sale.transfer_cap);
+        assert!(transfer_cap.for == object::id(nft), ENO_TRANSFER_PERMISSION);
+        option::fill(&mut nft.transfer_cap, transfer_cap);
+    }
+
+    public entry fun claim_with_transfer_cap<T>(new_owner: address, nft: &mut NFT<T>, transfer_cap: TransferCap<T>) {
         assert!(is_linked(&transfer_cap, nft), ENO_TRANSFER_PERMISSION);
         nft.owner = option::some(new_owner);
         // Each NFT can only have one corresponding transfer_cap, so this will never abort
         option::fill(&mut nft.transfer_cap, transfer_cap);
     }
+
+    public entry fun create_buy_offer() {}
+
+    public entry fun fill_buy_offer() {}
+
+    public entry fun cancel_buy_offer() {}
 
     // === Helper Utility Functions ===
 

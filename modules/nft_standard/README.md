@@ -48,3 +48,10 @@ The ownership of this property is enforced through blockchain contracts, rather 
 Programmable Virtual Item (PVI)
 Ownership As Code (OaC)
 Property As Code (PaC)
+
+### To Do
+
+- Add the 'Buy offer' functionality
+- Show example implementation with Outlaw Sky; how do to do mints?
+- Show example implementation with different royalties
+- Think about auctions

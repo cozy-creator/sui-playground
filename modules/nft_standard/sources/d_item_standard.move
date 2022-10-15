@@ -1,4 +1,4 @@
-module openrails::nft_standard {
+module openrails::d_item {
     use sui::object::{Self, ID, UID};
     // use sui::coin::{Coin};
     use std::option;
@@ -7,6 +7,7 @@ module openrails::nft_standard {
     use sui::coin::{Self, Coin};
     use sui::balance;
     use std::vector;
+    use std::string;
 
     const EBAD_WITNESS: u64 = 0;
     const ENOT_OWNER: u64 = 1;
@@ -18,16 +19,21 @@ module openrails::nft_standard {
     }
 
     // Unbound generic type
-    struct NFT<phantom T> has key {
+    struct DItem<phantom T> has key {
         id: UID,
         owner: option::Option<address>,
         data: option::Option<ID>,
         transfer_cap: option::Option<TransferCap<T>>
     }
 
-    struct NFTData<phantom T> has key {
+    struct Media has store {
+        url: string::String
+    }
+
+    struct DItemData<phantom T, D: store> has key {
         id: UID,
-        data: vector<u8>,
+        media: Media,
+        data: D
     }
 
     // transfer_Cap is only optional until shared objects can be deleted in Sui.
@@ -53,8 +59,8 @@ module openrails::nft_standard {
         transfer_cap: TransferCap<T>
     }
 
-    // May be a shared or owned object. Used in the buy_nft function call to pay
-    // royalties. Multiple Royalty objects may exist per `T`. NFTs cannot be bought or
+    // May be a shared or owned object. Used in the buy_ditem function call to pay
+    // royalties. Multiple Royalty objects may exist per `T`. DItems cannot be bought or
     // sold without access to a Royalty object.
     struct Royalty<phantom T> has key, store {
         id: UID,
@@ -62,9 +68,9 @@ module openrails::nft_standard {
         fee_bps: u64
     }
     
-    // Owned object, kept by the creator. NFTs of type `T` cannot be created without
+    // Owned object, kept by the creator. DItems of type `T` cannot be created without
     // this. Only one will ever exist per `T`
-    struct MintCap<phantom T> has key, store {
+    struct CraftingCap<phantom T> has key, store {
         id: UID
     }
 
@@ -80,13 +86,13 @@ module openrails::nft_standard {
 
     // === Admin Functions, for Collection Creators ===
 
-    // Create a new collection type `T` and return the `MintCap` and `RoyaltyCap` for
+    // Create a new collection type `T` and return the `CraftingCap` and `RoyaltyCap` for
     // `T` to the caller. Can only be called with a `one-time-witness` type, ensuring
     // that there will only ever be one of each cap per `T`.
     public fun create_collection<T: drop>(
         witness: T,
         ctx: &mut TxContext
-    ): (RoyaltyCap<T>, MintCap<T>) {
+    ): (RoyaltyCap<T>, CraftingCap<T>) {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBAD_WITNESS);
 
@@ -98,16 +104,16 @@ module openrails::nft_standard {
             id: object::new(ctx)
         };
 
-        let mint_cap = MintCap<T> {
+        let crafting_cap = CraftingCap<T> {
             id: object::new(ctx),
         };
 
-        (royalty_cap, mint_cap)
+        (royalty_cap, crafting_cap)
     }
 
-    // Once the MintCap is destroyed, new NFTs cannot be created within this collection
-    public entry fun destroy_mint_cap<T>(mint_cap: MintCap<T>) {
-        let MintCap { id } = mint_cap;
+    // Once the CraftingCap is destroyed, new dItems cannot be created within this collection
+    public entry fun destroy_crafting_cap<T>(crafting_cap: CraftingCap<T>) {
+        let CraftingCap { id } = crafting_cap;
         object::delete(id);
     }
 
@@ -137,36 +143,38 @@ module openrails::nft_standard {
         royalty.fee_bps = new_fee_bps;    
     }
 
-    public entry fun mint_nft_<T>(send_to: address, data: &NFTData<T>, mint_cap: &MintCap<T>, ctx: &mut TxContext) {
-        let nft = mint_nft(mint_cap, ctx);
-        nft.owner = option::some(send_to);
-        nft.data = option::some(object::id(data));
-        transfer::share_object(nft);
+    public entry fun craft_<T>(send_to: address, data: &DItemData<T>, crafting_cap: &CraftingCap<T>, ctx: &mut TxContext) {
+        let ditem = craft(send_to, data, crafting_cap, ctx);
+        transfer::transfer(ditem, send_to);
     }
 
-    public fun mint_nft<T>(_mint_cap: &MintCap<T>, ctx: &mut TxContext): NFT<T> {
+    public fun craft<T>(owner: address, data: &DItemData<T>, _crafting_cap: &CraftingCap<T>, ctx: &mut TxContext): DItem<T> {
         let uid = object::new(ctx);
         let id = object::uid_to_inner(&uid);
 
-        NFT<T> {
+        DItem<T> {
             id: uid,
-            owner: option::none(),
-            data: option::none(),
+            owner: option::some(owner),
+            data: option::some(object::id(data)),
             transfer_cap: option::some(TransferCap<T> {
                 for: id
             })
         }
     }
 
-    // === User Functions, for NFT Holders ===
+    public fun create_data<T, D: store>(data: D, ctx: &mut TxContext): DItemData<T, D> {
+        
+    }
 
-    public entry fun create_sell_offer_<C, T>(price: u64, nft: &mut NFT<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
-        // Assert that the owner of this NFT is sending this tx
-        assert!(is_owner(tx_context::sender(ctx), nft), ENOT_OWNER);
-        // Assert that the transfer cap still exists within the NFT
-        assert!(option::is_some(&nft.transfer_cap), ENO_TRANSFER_PERMISSION);
+    // === User Functions, for DItem Holders ===
 
-        let transfer_cap = option::extract(&mut nft.transfer_cap);
+    public entry fun create_sell_offer_<C, T>(price: u64, ditem: &mut DItem<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+        // Assert that the owner of this DItem is sending this tx
+        assert!(is_owner(tx_context::sender(ctx), ditem), ENOT_OWNER);
+        // Assert that the transfer cap still exists within the DItem
+        assert!(option::is_some(&ditem.transfer_cap), ENO_TRANSFER_PERMISSION);
+
+        let transfer_cap = option::extract(&mut ditem.transfer_cap);
         let pay_to = tx_context::sender(ctx);
         create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }
@@ -188,7 +196,7 @@ module openrails::nft_standard {
     // Once Sui supports passing shared objects by value, rather than just reference, this function
     // will change to consume the shared SellOffer wrapper, and delete it.
     // Note that the new_owner does not necessarily have to be the sender of the transaction
-    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, nft: &mut NFT<T>, ctx: &mut TxContext) {
+    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, ditem: &mut DItem<T>, ctx: &mut TxContext) {
         assert!(option::is_some(&for_sale.transfer_cap), ENO_TRANSFER_PERMISSION);
 
         let buyer_royalty = ((for_sale.price as u128) * (royalty.fee_bps as u128) / 10000 / 2 as u64);
@@ -207,32 +215,27 @@ module openrails::nft_standard {
         // Remainder goes to the seller
         take_coin_and_transfer(for_sale.pay_to, &mut coin, for_sale.price - for_sale.seller_royalty - for_sale.market_fee, ctx);
 
-        // Refund the sender any extra balance they paid, or destroy the empty coin
-        if (coin::value(&coin) > 0) { 
-            coin::keep<C>(coin, ctx);
-        } else {
-            coin::destroy_zero(coin);
-        };
+        refund(coin, ctx);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        claim_with_transfer_cap(new_owner, nft, transfer_cap);
+        claim_with_transfer_cap(new_owner, ditem, transfer_cap);
     }
 
     // In the future, this will delete the SellOffer
-    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, nft: &mut NFT<T>, ctx: &TxContext) {
+    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, ditem: &mut DItem<T>, ctx: &TxContext) {
         let addr = tx_context::sender(ctx);
-        assert!(addr == *option::borrow(&nft.owner), ENOT_OWNER);
+        assert!(addr == *option::borrow(&ditem.owner), ENOT_OWNER);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        assert!(transfer_cap.for == object::id(nft), ENO_TRANSFER_PERMISSION);
-        option::fill(&mut nft.transfer_cap, transfer_cap);
+        assert!(transfer_cap.for == object::id(ditem), ENO_TRANSFER_PERMISSION);
+        option::fill(&mut ditem.transfer_cap, transfer_cap);
     }
 
-    public entry fun claim_with_transfer_cap<T>(new_owner: address, nft: &mut NFT<T>, transfer_cap: TransferCap<T>) {
-        assert!(is_linked(&transfer_cap, nft), ENO_TRANSFER_PERMISSION);
-        nft.owner = option::some(new_owner);
-        // Each NFT can only have one corresponding transfer_cap, so this will never abort
-        option::fill(&mut nft.transfer_cap, transfer_cap);
+    public entry fun claim_with_transfer_cap<T>(new_owner: address, ditem: &mut DItem<T>, transfer_cap: TransferCap<T>) {
+        assert!(is_linked(&transfer_cap, ditem), ENO_TRANSFER_PERMISSION);
+        ditem.owner = option::some(new_owner);
+        // Each DItem can only have one corresponding transfer_cap, so this will never abort
+        option::fill(&mut ditem.transfer_cap, transfer_cap);
     }
 
     public entry fun create_buy_offer() {}
@@ -265,25 +268,34 @@ module openrails::nft_standard {
         coin::from_balance(sub_balance, ctx)
     }
 
-    public fun take_coin_and_transfer<C>(receiver: address, coin: &mut Coin<C>, value: u64, ctx: &mut TxContext) {
+    public entry fun take_coin_and_transfer<C>(receiver: address, coin: &mut Coin<C>, value: u64, ctx: &mut TxContext) {
         if (value > 0) {
             let split_coin = take_from_coin<C>(coin, value, ctx);
             transfer::transfer(split_coin, receiver);
         }
     }
 
+    // Refund the sender any extra balance they paid, or destroy the empty coin
+    public entry fun refund<C>(coin: Coin<C>, ctx: &TxContext) {
+        if (coin::value(&coin) > 0) { 
+            coin::keep<C>(coin, ctx);
+        } else {
+            coin::destroy_zero(coin);
+        };
+    }
+
     // === Authority Checking Functions ===
 
-    public fun is_owner<T>(addr: address, nft: &NFT<T>): bool {
-        if (option::is_some(&nft.owner)) {
-            *option::borrow(&nft.owner) == addr
+    public fun is_owner<T>(addr: address, ditem: &DItem<T>): bool {
+        if (option::is_some(&ditem.owner)) {
+            *option::borrow(&ditem.owner) == addr
         } else {
             true
         }
     }
 
-    public fun is_linked<T>(transfer_cap: &TransferCap<T>, nft: &NFT<T>): bool {
-        transfer_cap.for == object::id(nft)
+    public fun is_linked<T>(transfer_cap: &TransferCap<T>, ditem: &DItem<T>): bool {
+        transfer_cap.for == object::id(ditem)
     }
 
     // === Get functions, to read struct data ===

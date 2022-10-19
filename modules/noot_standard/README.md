@@ -55,3 +55,12 @@ Property As Code (PaC)
 - Show example implementation with Outlaw Sky; how do to do mints?
 - Show example implementation with different royalties
 - Think about auctions
+- The Sui core includes a url standard with has commits of content; that could be useful. Perhaps integrate that
+
+### Problems to Solve
+
+- on-chain metadata should be compact. However, how do we turn that metadata into a human-readable format? My suggestion is to have some sort of ancilliary off-chain functions (typescript perhaps) that map on-chain data into human-readable strings
+
+### Definitions
+
+Noot: a unit of ownership on a cryptographic ledger

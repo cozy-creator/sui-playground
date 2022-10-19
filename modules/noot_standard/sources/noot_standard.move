@@ -1,13 +1,14 @@
-module openrails::d_item {
+module openrails::noot {
     use sui::object::{Self, ID, UID};
     // use sui::coin::{Coin};
-    use std::option;
+    use std::option::{Self, Option};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::coin::{Self, Coin};
     use sui::balance;
+    use sui::vec_map::VecMap;
     use std::vector;
-    use std::string;
+    use std::string::String;
 
     const EBAD_WITNESS: u64 = 0;
     const ENOT_OWNER: u64 = 1;
@@ -19,21 +20,19 @@ module openrails::d_item {
     }
 
     // Unbound generic type
-    struct DItem<phantom T> has key {
+    struct Noot<phantom T> has key {
         id: UID,
         owner: option::Option<address>,
         data: option::Option<ID>,
         transfer_cap: option::Option<TransferCap<T>>
     }
 
-    struct Media has store {
-        url: string::String
-    }
-
-    struct DItemData<phantom T, D: store> has key {
+    // TODO: Replace VecMap with a more efficient data structure once one becomes a available within Sui
+    // VecMap only has O(N) lookup time
+    struct NootData<phantom T, D: store> has key {
         id: UID,
-        media: Media,
-        data: D
+        display: VecMap<String, String>,
+        body: D
     }
 
     // transfer_Cap is only optional until shared objects can be deleted in Sui.
@@ -54,13 +53,13 @@ module openrails::d_item {
         offer: Coin<C>
     }
 
-    struct Loan<phantom T> has key, store {
+    struct ReclaimCapability<phantom T> has key, store {
         id: UID,
         transfer_cap: TransferCap<T>
     }
 
-    // May be a shared or owned object. Used in the buy_ditem function call to pay
-    // royalties. Multiple Royalty objects may exist per `T`. DItems cannot be bought or
+    // May be a shared or owned object. Used in the buy_noot function call to pay
+    // royalties. Multiple Royalty objects may exist per `T`. Noots cannot be bought or
     // sold without access to a Royalty object.
     struct Royalty<phantom T> has key, store {
         id: UID,
@@ -68,11 +67,11 @@ module openrails::d_item {
         fee_bps: u64
     }
     
-    // Owned object, kept by the creator. DItems of type `T` cannot be created without
+    // Owned object, kept by the creator. Noots of type `T` cannot be created without
     // this. Only one will ever exist per `T`
-    struct CraftingCap<phantom T> has key, store {
-        id: UID
-    }
+    // struct CraftingCap<phantom T> has key, store {
+    //     id: UID
+    // }
 
     // Owned object, kept by the creator. Used to create Royalty objects of type `T`
     // or change them. Only one will ever exist per `T`
@@ -92,7 +91,7 @@ module openrails::d_item {
     public fun create_collection<T: drop>(
         witness: T,
         ctx: &mut TxContext
-    ): (RoyaltyCap<T>, CraftingCap<T>) {
+    ): RoyaltyCap<T> {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBAD_WITNESS);
 
@@ -100,22 +99,20 @@ module openrails::d_item {
         // event::emit(CollectionCreated<T> {
         // });
 
-        let royalty_cap = RoyaltyCap<T> {
+        RoyaltyCap<T> {
             id: object::new(ctx)
-        };
+        }
 
-        let crafting_cap = CraftingCap<T> {
-            id: object::new(ctx),
-        };
-
-        (royalty_cap, crafting_cap)
+        // let crafting_cap = CraftingCap<T> {
+        //     id: object::new(ctx),
+        // };
     }
 
     // Once the CraftingCap is destroyed, new dItems cannot be created within this collection
-    public entry fun destroy_crafting_cap<T>(crafting_cap: CraftingCap<T>) {
-        let CraftingCap { id } = crafting_cap;
-        object::delete(id);
-    }
+    // public entry fun destroy_crafting_cap<T>(crafting_cap: CraftingCap<T>) {
+    //     let CraftingCap { id } = crafting_cap;
+    //     object::delete(id);
+    // }
 
     public entry fun create_royalty_<T>(pay_to: address, fee_bps: u64, royalty_cap: &RoyaltyCap<T>, ctx: &mut TxContext) {
         let royalty = create_royalty<T>(pay_to, fee_bps, royalty_cap, ctx);
@@ -143,18 +140,18 @@ module openrails::d_item {
         royalty.fee_bps = new_fee_bps;    
     }
 
-    public entry fun craft_<T>(send_to: address, data: &DItemData<T>, crafting_cap: &CraftingCap<T>, ctx: &mut TxContext) {
-        let ditem = craft(send_to, data, crafting_cap, ctx);
-        transfer::transfer(ditem, send_to);
+    public entry fun craft_<T: drop, D: store>(witness: T, send_to: address, data: &NootData<T, D>, ctx: &mut TxContext) {
+        let noot = craft(witness, option::some(send_to), data, ctx);
+        transfer::transfer(noot, send_to);
     }
 
-    public fun craft<T>(owner: address, data: &DItemData<T>, _crafting_cap: &CraftingCap<T>, ctx: &mut TxContext): DItem<T> {
+    public fun craft<T: drop, D: store>(_witness: T, owner: Option<address>, data: &NootData<T, D>, ctx: &mut TxContext): Noot<T> {
         let uid = object::new(ctx);
         let id = object::uid_to_inner(&uid);
 
-        DItem<T> {
+        Noot<T> {
             id: uid,
-            owner: option::some(owner),
+            owner: owner,
             data: option::some(object::id(data)),
             transfer_cap: option::some(TransferCap<T> {
                 for: id
@@ -162,19 +159,23 @@ module openrails::d_item {
         }
     }
 
-    public fun create_data<T, D: store>(data: D, ctx: &mut TxContext): DItemData<T, D> {
-        
+    public fun create_data<T, D: store>(_witness: T, display: VecMap<String, String>, body: D, ctx: &mut TxContext): NootData<T, D> {
+        NootData {
+            id: object::new(ctx),
+            display,
+            body
+        }
     }
 
-    // === User Functions, for DItem Holders ===
+    // === User Functions, for Noot Holders ===
 
-    public entry fun create_sell_offer_<C, T>(price: u64, ditem: &mut DItem<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
-        // Assert that the owner of this DItem is sending this tx
-        assert!(is_owner(tx_context::sender(ctx), ditem), ENOT_OWNER);
-        // Assert that the transfer cap still exists within the DItem
-        assert!(option::is_some(&ditem.transfer_cap), ENO_TRANSFER_PERMISSION);
+    public entry fun create_sell_offer_<C, T>(price: u64, noot: &mut Noot<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+        // Assert that the owner of this Noot is sending this tx
+        assert!(is_owner(tx_context::sender(ctx), noot), ENOT_OWNER);
+        // Assert that the transfer cap still exists within the Noot
+        assert!(option::is_some(&noot.transfer_cap), ENO_TRANSFER_PERMISSION);
 
-        let transfer_cap = option::extract(&mut ditem.transfer_cap);
+        let transfer_cap = option::extract(&mut noot.transfer_cap);
         let pay_to = tx_context::sender(ctx);
         create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }
@@ -196,7 +197,7 @@ module openrails::d_item {
     // Once Sui supports passing shared objects by value, rather than just reference, this function
     // will change to consume the shared SellOffer wrapper, and delete it.
     // Note that the new_owner does not necessarily have to be the sender of the transaction
-    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, ditem: &mut DItem<T>, ctx: &mut TxContext) {
+    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, noot: &mut Noot<T>, ctx: &mut TxContext) {
         assert!(option::is_some(&for_sale.transfer_cap), ENO_TRANSFER_PERMISSION);
 
         let buyer_royalty = ((for_sale.price as u128) * (royalty.fee_bps as u128) / 10000 / 2 as u64);
@@ -218,24 +219,24 @@ module openrails::d_item {
         refund(coin, ctx);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        claim_with_transfer_cap(new_owner, ditem, transfer_cap);
+        claim_with_transfer_cap(new_owner, noot, transfer_cap);
     }
 
     // In the future, this will delete the SellOffer
-    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, ditem: &mut DItem<T>, ctx: &TxContext) {
+    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, noot: &mut Noot<T>, ctx: &TxContext) {
         let addr = tx_context::sender(ctx);
-        assert!(addr == *option::borrow(&ditem.owner), ENOT_OWNER);
+        assert!(addr == *option::borrow(&noot.owner), ENOT_OWNER);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        assert!(transfer_cap.for == object::id(ditem), ENO_TRANSFER_PERMISSION);
-        option::fill(&mut ditem.transfer_cap, transfer_cap);
+        assert!(transfer_cap.for == object::id(noot), ENO_TRANSFER_PERMISSION);
+        option::fill(&mut noot.transfer_cap, transfer_cap);
     }
 
-    public entry fun claim_with_transfer_cap<T>(new_owner: address, ditem: &mut DItem<T>, transfer_cap: TransferCap<T>) {
-        assert!(is_linked(&transfer_cap, ditem), ENO_TRANSFER_PERMISSION);
-        ditem.owner = option::some(new_owner);
-        // Each DItem can only have one corresponding transfer_cap, so this will never abort
-        option::fill(&mut ditem.transfer_cap, transfer_cap);
+    public entry fun claim_with_transfer_cap<T>(new_owner: address, noot: &mut Noot<T>, transfer_cap: TransferCap<T>) {
+        assert!(is_linked(&transfer_cap, noot), ENO_TRANSFER_PERMISSION);
+        noot.owner = option::some(new_owner);
+        // Each Noot can only have one corresponding transfer_cap, so this will never abort
+        option::fill(&mut noot.transfer_cap, transfer_cap);
     }
 
     public entry fun create_buy_offer() {}
@@ -286,16 +287,20 @@ module openrails::d_item {
 
     // === Authority Checking Functions ===
 
-    public fun is_owner<T>(addr: address, ditem: &DItem<T>): bool {
-        if (option::is_some(&ditem.owner)) {
-            *option::borrow(&ditem.owner) == addr
+    public fun is_owner<T>(addr: address, noot: &Noot<T>): bool {
+        if (option::is_some(&noot.owner)) {
+            *option::borrow(&noot.owner) == addr
         } else {
             true
         }
     }
 
-    public fun is_linked<T>(transfer_cap: &TransferCap<T>, ditem: &DItem<T>): bool {
-        transfer_cap.for == object::id(ditem)
+    public fun has_transfer_cap<T>(noot: &Noot<T>): bool {
+        option::is_some(&noot.transfer_cap)
+    }
+
+    public fun is_linked<T>(transfer_cap: &TransferCap<T>, noot: &Noot<T>): bool {
+        transfer_cap.for == object::id(noot)
     }
 
     // === Get functions, to read struct data ===

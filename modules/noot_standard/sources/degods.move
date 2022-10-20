@@ -1,5 +1,5 @@
 module openrails::degods {
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::transfer;
@@ -8,14 +8,21 @@ module openrails::degods {
     use std::string::{Self, String};
     use std::option;
     use std::vector;
-    use openrails::noot::{Self};
+    use openrails::noot::{Self, Noot};
     use openrails::rand;
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
+    const EDISPENSER_LOCKED: u64 = 2;
+
+    struct WITNESS has drop {}
 
     struct DEGODS has drop {}
 
-    struct Data has store {
+    struct AdminCap has key, store {
+        id: UID
+    }
+
+    struct Traits has store {
         id: UID,
         background: String,
         skin: String,
@@ -30,29 +37,45 @@ module openrails::degods {
     }
 
     struct NootDNA has store {
-        media: VecMap<String, String>,
-        data: Data
+        display: VecMap<String, String>,
+        body: Traits
     }
 
-    struct VendingMachine has key {
+    struct NootDispenser has key {
         id: UID,
         price: u64,
         treasury_addr: address,
-        noot_dna: vector<NootDNA>,
+        locked: bool,
+        contents: vector<NootDNA>,
     }
 
-    public entry fun create_vending_() {
+    // Give the admin capability to the address that deployed this module
+    fun init(witness: WITNESS, ctx: &mut TxContext) {
+        let royalty_cap = noot::create_collection(witness, DEGODS {}, ctx);
 
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        transfer::transfer(admin_cap, tx_context::sender(ctx));
     }
 
-    public fun create_vending(): VendingCapability {
-        
+    public entry fun create_dispenser_(admin_cap: &AdminCap, price: u64, treasury_addr: address, ctx: &mut TxContext) {
+        let noot_dispenser = create_dispenser(admin_cap, price, treasury_addr, ctx);
+        transfer::share_object(noot_dispenser);
     }
 
-    public entry fun load_vending(traits: vector<String>, vending_machine: &mut VendingMachine, ctx: &mut TxContext) {
+    public fun create_dispenser(_admin_cap: &AdminCap, price: u64, treasury_addr: address, ctx: &mut TxContext): NootDispenser {
+        NootDispenser {
+            id: object::new(ctx),
+            price,
+            treasury_addr,
+            locked: true,
+            contents: vector::empty<NootDNA>()
+        }
+    }
+
+    public entry fun load_noot_dispenser(_admin_cap: &AdminCap, dispenser: &mut NootDispenser, traits: vector<String>, ctx: &mut TxContext) {
         let addr = tx_context::sender(ctx);
 
-        let data = Data {
+        let body = Traits {
             id: object::new(ctx),
             background: *vector::borrow(&traits, 0),
             skin: *vector::borrow(&traits, 1),
@@ -66,38 +89,38 @@ module openrails::degods {
             y00t: false
         };
 
-        let media = vec_map::empty<String, String>();
-        vec_map::insert(&mut media, string::utf8(b"https::png"), *vector::borrow(&traits, 9));
+        let display = vec_map::empty<String, String>();
+        vec_map::insert(&mut display, string::utf8(b"https:png"), *vector::borrow(&traits, 9));
 
         let noot_dna = NootDNA {
-            media,
-            data
+            display,
+            body
         };
 
-        vector::push_back(&mut vending_machine.noot_dna, noot_dna);
+        vector::push_back(&mut dispenser.contents, noot_dna);
     }
 
-    public entry fun craft_(coin: Coin<SUI>, send_to: address, vending_machine: &mut VendingMachine, ctx: &mut TxContext) {
-        let noot = craft(coin, send_to, cap_chest, craft_info, ctx);
+    public entry fun craft_(coin: Coin<SUI>, send_to: address, dispenser: &mut NootDispenser, ctx: &mut TxContext) {
+        let noot = craft(coin, send_to, dispenser, ctx);
         transfer::transfer(noot, send_to);
     }
 
-    public fun craft(coin: Coin<SUI>, owner: address, vending_machine: &mut VendingMachine, ctx: &mut TxContext): DItem<DEGODS> {
-        let price = vending_machine.price;
+    public fun craft(coin: Coin<SUI>, owner: address, dispenser: &mut NootDispenser, ctx: &mut TxContext): Noot<DEGODS> {
+        assert!(!dispenser.locked, EDISPENSER_LOCKED);
+        let price = dispenser.price;
         assert!(coin::value(&coin) >= price, EINSUFFICIENT_FUNDS);
-        d_item::take_coin_and_transfer(vending_machine.treasury_addr, &mut coin, price, ctx);
-        d_item::refund(coin, ctx);
 
-        let length = vector::length(&vending_machine.noot_dna);
+        noot::take_coin_and_transfer(dispenser.treasury_addr, &mut coin, price, ctx);
+        noot::refund(coin, ctx);
+
+        let length = vector::length(&dispenser.contents);
         let index = rand::rng(0, length);
-        let noot_dna = vector::remove(&mut vending_machine.noot_dna, index);
-        let NootDNA { media, data } = noot_dna;
+        let NootDNA { display, body } = vector::remove(&mut dispenser.contents, index);
 
-        let data = d_item::create_data<DEGODS, Data>(data, media, ctx);
-
-        let d_item = d_item::craft(owner, &data, &cap_chest.crafting_cap, ctx);
+        let data = noot::create_data<DEGODS, Traits>(DEGODS {}, display, body, ctx);
+        let noot = noot::craft(DEGODS {}, option::some(owner), &data, ctx);
 
         transfer::share_object(data);
-        d_item
+        noot
     }
 }

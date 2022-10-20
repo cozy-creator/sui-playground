@@ -5,11 +5,13 @@ module openrails::outlaw_sky {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::vec_map;
-    use openrails::d_item::{Self, DItem};
+    use openrails::noot::{Self, Noot};
     use std::string::{Self, String};
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const ENOT_OWNER: u64 = 2;
+
+    struct WITNESS<phantom T> has drop {}
 
     struct OUTLAW_SKY has drop {}
 
@@ -36,14 +38,14 @@ module openrails::outlaw_sky {
 
     struct CapabilityChest has key {
         id: UID,
-        royalty_cap: d_item::RoyaltyCap<OUTLAW_SKY>,
-        crafting_cap: d_item::CraftingCap<OUTLAW_SKY>
+        royalty_cap: noot::RoyaltyCap<OUTLAW_SKY>,
+        crafting_cap: noot::CraftingCap<OUTLAW_SKY>
     }
 
     fun init(witness: OUTLAW_SKY, ctx: &mut TxContext) {
         let _addr = tx_context::sender(ctx);
 
-        let (royalty_cap, crafting_cap) = d_item::create_collection<OUTLAW_SKY>(witness, ctx);
+        let (royalty_cap, crafting_cap) = noot::create_collection<OUTLAW_SKY>(witness, ctx);
 
         let cap_chest = CapabilityChest {
             id: object::new(ctx),
@@ -64,24 +66,24 @@ module openrails::outlaw_sky {
     }
 
     public entry fun craft_(coin: Coin<SUI>, send_to: address, cap_chest: &CapabilityChest, craft_info: &mut CraftInfo, ctx: &mut TxContext) {
-        let d_item = craft(coin, send_to, cap_chest, craft_info, ctx);
-        transfer::transfer(d_item, send_to);
+        let noot = craft(coin, send_to, cap_chest, craft_info, ctx);
+        transfer::transfer(noot, send_to);
     }
 
-    public fun craft(coin: Coin<SUI>, owner: address, cap_chest: &CapabilityChest, craft_info: &mut CraftInfo, ctx: &mut TxContext): DItem<OUTLAW_SKY> {
+    public fun craft(coin: Coin<SUI>, owner: address, cap_chest: &CapabilityChest, craft_info: &mut CraftInfo, ctx: &mut TxContext): Noot<OUTLAW_SKY> {
         let price = *&craft_info.price;
         assert!(coin::value(&coin) >= price, EINSUFFICIENT_FUNDS);
-        d_item::take_coin_and_transfer(craft_info.treasury_addr, &mut coin, price, ctx);
-        d_item::refund(coin, ctx);
+        noot::take_coin_and_transfer(craft_info.treasury_addr, &mut coin, price, ctx);
+        noot::refund(coin, ctx);
 
         let (media, inner_data) = generate_data(ctx);
 
-        let data = d_item::create_data<OUTLAW_SKY, Data>(inner_data, media, ctx);
+        let data = noot::create_data<OUTLAW_SKY, Data>(inner_data, media, ctx);
 
-        let d_item = d_item::craft(owner, &data, &cap_chest.crafting_cap, ctx);
+        let noot = noot::craft(owner, &data, &cap_chest.crafting_cap, ctx);
 
         transfer::share_object(data);
-        d_item
+        noot
     }
 
     public fun generate_data(ctx: &mut TxContext): (vec_map::VecMap<String, String>, Data) {
@@ -103,8 +105,8 @@ module openrails::outlaw_sky {
         (media, inner_data)
     }
 
-    public entry fun modify_data(d_item: &DItem<OUTLAW_SKY>, data: &mut Data, new_value: u64, ctx: &TxContext) {
-        assert!(d_item::is_owner(tx_context::sender(ctx), d_item), ENOT_OWNER);
+    public entry fun modify_data(noot: &Noot<OUTLAW_SKY>, data: &mut Data, new_value: u64, ctx: &TxContext) {
+        assert!(noot::is_owner(tx_context::sender(ctx), noot), ENOT_OWNER);
         data.stuff = new_value;
     }
 }

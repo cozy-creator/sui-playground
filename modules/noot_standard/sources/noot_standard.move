@@ -85,15 +85,21 @@ module openrails::noot {
 
     // === Admin Functions, for Collection Creators ===
 
+    // Note that because one_time_witness and _witness (the noot's struct type) are different,
+    // it's possible that the same collection could be created multiple times. Although
+    // I don't know why a collection would want to do that. If that occurs, it's probably
+    // a bug or a hack.
+
     // Create a new collection type `T` and return the `CraftingCap` and `RoyaltyCap` for
     // `T` to the caller. Can only be called with a `one-time-witness` type, ensuring
     // that there will only ever be one of each cap per `T`.
-    public fun create_collection<T: drop>(
-        witness: T,
+    public fun create_collection<W: drop, T: drop>(
+        one_time_witness: W,
+        _witness: T, 
         ctx: &mut TxContext
     ): RoyaltyCap<T> {
         // Make sure there's only one instance of the type T
-        assert!(sui::types::is_one_time_witness(&witness), EBAD_WITNESS);
+        assert!(sui::types::is_one_time_witness(&one_time_witness), EBAD_WITNESS);
 
         // TODO: add events
         // event::emit(CollectionCreated<T> {
@@ -159,7 +165,7 @@ module openrails::noot {
         }
     }
 
-    public fun create_data<T, D: store>(_witness: T, display: VecMap<String, String>, body: D, ctx: &mut TxContext): NootData<T, D> {
+    public fun create_data<T: drop, D: store>(_witness: T, display: VecMap<String, String>, body: D, ctx: &mut TxContext): NootData<T, D> {
         NootData {
             id: object::new(ctx),
             display,

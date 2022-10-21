@@ -48,6 +48,11 @@ module noot_examples::degods {
         transfer::transfer(dispenser_cap, addr);
     }
 
+    // This has to be called once for every noot that will be available in the container
+    // So if you have a 10k collection, you must call this 10k times, supplying the noot data
+    // each time.
+    // You can call noot::dispenser::unload_dispenser along with the corresponding index if you
+    // want to remove the data
     public entry fun load_dispenser(_dispenser_cap: &AdminCap, dispenser: &mut NootDispenser, traits: vector<vector<u8>>, ctx: &mut TxContext) {
         let body = Traits {
             id: object::new(ctx),

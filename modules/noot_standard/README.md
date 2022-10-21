@@ -1,11 +1,35 @@
+### Terminology
+
+**Noot:** a programmable unit of ownership. (plural: noots)
+
+**Craft:** accepts inputs, creates and returns a noot.
+
+**Deconstruct:** accepts a noot, destroys it, and then returns any residual output.
+
+**Noot Data:** data pointed to by a Noot.
+
+**Noot DNA:** consists of a display and body.
+
+**Transfer Cap:** a capability scoped to a specific noot. Whoever possess this can take possession of that noot. There is always one and only one transfer_cap per noot.
+
+**Fully Owned Noot:** a noot is 'fully owned' if its transfer_cap is stored inside itself. The noot CANNOT be claimed by any external process.
+
+**Partially Owned Noot:** a noot is 'partially owned' if its transfer_cap is outside of itself. The noot CAN be claimed by an external process.
+
+**Noot Dispenser:** a module that is pre-loaded with a fixed supply of NootDNA. It accepts coins, and returns NootDNA, which is used to craft a Noot.
+
+### Why We Built This
+
+-
+
 ### Downsides
 
-- No transferring
+- Restricted transfering
 - NFTs are Shared Objects
 
 ### Data Storage
 
-**Data:** We can take two approaches to storing NFT data (1) embedded data, in which the data is stored within the NFT struct itself, or (2) pointer data, in which each NFT merely stores a pointer to an object-id that contains the NFT data. I believe Origin Byte referred to this as "tight" versus "loosely" packed data. The second approach, pointer-data, is clearly superior, because:
+**Data:** We can take two approaches to storing NFT data (1) embedded data, in which the data is stored within the NFT struct itself, or (2) pointer data, in which each NFT merely stores a pointer to an object-id that contains the NFT data. I believe Origin Byte referred to this as "embedded" versus "loosely" packed data. The second approach, pointer-data, is clearly superior, because:
 
 1. **Saves Space:** Many NFTs can point to the same data, saving on expensive on-chain storage. Imagine a use-case where Magic The Gathering wants to issue 100 identical cards; they can create 100 NFTs, and give them out to 100 people, but every NFT points to the same NFTData object, saving on 100x data-duplication, and allowing Magic The Gathering to make any changes to that card in one place. Imagine also an NFT which is a blank-canvas when it's first minted; every user will start out with their NFT pointing to the same blank NFTData object, but as soon as they being to change it, a new NFTData object will be created specifically for them, which the NFT will point to.
 
@@ -64,3 +88,9 @@ Property As Code (PaC)
 ### Definitions
 
 Noot: a unit of ownership on a cryptographic ledger
+
+### Exploits
+
+- **Royalty Bypass:** the concept is that someone deploys a module which wraps a noot transfer function with their own custom marketplace function, so that either marketplace royalties are not paid, or they are paid to the wrong party.
+
+- **Skipping Randomness:** the concept is that someone deploys a module which crafts a randomly-generated noot, and then checks to see if that noot has the desired property that they're farming for; if it doesn't, then they abort the transaction. The net result is that they can do thousands of transactions for just the cost of gas until they manage to get the desired noot, regardless of how improbable the noot is.

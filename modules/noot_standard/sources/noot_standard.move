@@ -15,15 +15,14 @@ module openrails::noot {
     const ENO_TRANSFER_PERMISSION: u64 = 2;
     const EINSUFFICIENT_FUNDS: u64 = 3;
 
-    struct TransferCap<phantom T> has store {
-        for: ID
-    }
-
+    // Do not add 'store' to Noot or NootData. Keeping them non-storable means that they cannot be
+    // transferred using polymorphic transfer (transfer::transfer), meaning we can define our own
+    // noot-specific transfer functions.
     // Unbound generic type
     struct Noot<phantom T> has key {
         id: UID,
         owner: option::Option<address>,
-        data: option::Option<ID>,
+        data_id: option::Option<ID>,
         transfer_cap: option::Option<TransferCap<T>>
     }
 
@@ -33,6 +32,10 @@ module openrails::noot {
         id: UID,
         display: VecMap<String, String>,
         body: D
+    }
+
+    struct TransferCap<phantom T> has store {
+        for: ID
     }
 
     // transfer_Cap is only optional until shared objects can be deleted in Sui.
@@ -158,7 +161,7 @@ module openrails::noot {
         Noot<T> {
             id: uid,
             owner: owner,
-            data: option::some(object::id(data)),
+            data_id: option::some(object::id(data)),
             transfer_cap: option::some(TransferCap<T> {
                 for: id
             })
@@ -171,6 +174,10 @@ module openrails::noot {
             display,
             body
         }
+    }
+
+    public fun borrow_data_body<T: drop, D: store>(_witness: T, noot_data: &mut NootData<T, D>): &mut D {
+        &mut noot_data.body
     }
 
     // === User Functions, for Noot Holders ===
@@ -186,7 +193,7 @@ module openrails::noot {
         create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }
 
-    public entry fun create_sell_offer<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+    public fun create_sell_offer<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         let for_sale = SellOffer<C, T> {
             id: object::new(ctx),
             pay_to,
@@ -203,7 +210,12 @@ module openrails::noot {
     // Once Sui supports passing shared objects by value, rather than just reference, this function
     // will change to consume the shared SellOffer wrapper, and delete it.
     // Note that the new_owner does not necessarily have to be the sender of the transaction
-    public entry fun fill_seller_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, noot: &mut Noot<T>, ctx: &mut TxContext) {
+    public entry fun fill_sell_offer_<C, T: drop>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, noot: &mut Noot<T>, ctx: &mut TxContext) {
+        let transfer_cap = fill_sell_offer(for_sale, coin, royalty, market_addr, ctx);
+        transfer_and_fully_own(new_owner, noot, transfer_cap);
+    }
+
+    public fun fill_sell_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, royalty: &Royalty<T>, market_addr: address, ctx: &mut TxContext): TransferCap<T> {
         assert!(option::is_some(&for_sale.transfer_cap), ENO_TRANSFER_PERMISSION);
 
         let buyer_royalty = ((for_sale.price as u128) * (royalty.fee_bps as u128) / 10000 / 2 as u64);
@@ -225,11 +237,11 @@ module openrails::noot {
         refund(coin, ctx);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        claim_with_transfer_cap(new_owner, noot, transfer_cap);
+        transfer_cap
     }
 
     // In the future, this will delete the SellOffer
-    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, noot: &mut Noot<T>, ctx: &TxContext) {
+    public entry fun cancel_sell_offer<C, T>(for_sale: &mut SellOffer<C,T>, noot: &mut Noot<T>, ctx: &mut TxContext) {
         let addr = tx_context::sender(ctx);
         assert!(addr == *option::borrow(&noot.owner), ENOT_OWNER);
 
@@ -238,18 +250,41 @@ module openrails::noot {
         option::fill(&mut noot.transfer_cap, transfer_cap);
     }
 
-    public entry fun claim_with_transfer_cap<T>(new_owner: address, noot: &mut Noot<T>, transfer_cap: TransferCap<T>) {
-        assert!(is_linked(&transfer_cap, noot), ENO_TRANSFER_PERMISSION);
-        noot.owner = option::some(new_owner);
-        // Each Noot can only have one corresponding transfer_cap, so this will never abort
-        option::fill(&mut noot.transfer_cap, transfer_cap);
-    }
-
     public entry fun create_buy_offer() {}
 
     public entry fun fill_buy_offer() {}
 
     public entry fun cancel_buy_offer() {}
+
+    public fun transfer_and_fully_own<T: drop>(
+        new_owner: address, 
+        noot: &mut Noot<T>, 
+        transfer_cap: TransferCap<T>) 
+    {
+        transfer_with_cap(&transfer_cap, noot, new_owner);
+        option::fill(&mut noot.transfer_cap, transfer_cap);
+    }
+
+    // transfer_cap does not have key, so this cannot be used as an entry function
+    public fun transfer_with_cap<T: drop>(transfer_cap: &TransferCap<T>, noot: &mut Noot<T>, new_owner: address) {
+        assert!(is_correct_transfer_cap(transfer_cap, noot), ENO_TRANSFER_PERMISSION);
+        noot.owner = option::some(new_owner);
+    }
+
+    // This prevents an inconsistent state; if the noot is in single-writer mode, an external module could
+    // transfer the noot and allow noot.owner to become inconsistent with its Sui-defined owner
+    public fun transfer<T: drop>(_witness: T, noot: Noot<T>, new_owner: address) {
+        noot.owner = option::some(new_owner);
+        transfer::transfer(noot, new_owner);
+    }
+
+    public fun transfer_data<T: drop, D: store>(_witness: T, noot_data: NootData<T, D>, new_owner: address) {
+        transfer::transfer(noot_data, new_owner);
+    }
+
+    public fun share_data<T: drop, D: store>(_witness: T, noot_data: NootData<T, D>) {
+        transfer::share_object(noot_data);
+    }
 
     // === Helper Utility Functions ===
 
@@ -283,7 +318,7 @@ module openrails::noot {
     }
 
     // Refund the sender any extra balance they paid, or destroy the empty coin
-    public entry fun refund<C>(coin: Coin<C>, ctx: &TxContext) {
+    public entry fun refund<C>(coin: Coin<C>, ctx: &mut TxContext) {
         if (coin::value(&coin) > 0) { 
             coin::keep<C>(coin, ctx);
         } else {
@@ -301,11 +336,19 @@ module openrails::noot {
         }
     }
 
-    public fun has_transfer_cap<T>(noot: &Noot<T>): bool {
+    public fun is_correct_data<T, D: store>(noot: &Noot<T>, noot_data: &NootData<T, D>): bool {
+        if (option::is_none(&noot.data_id)) {
+            return false
+        };
+        let data_id = option::borrow(&noot.data_id);
+        (data_id == &object::id(noot_data))
+    }
+
+    public fun is_fully_owned<T>(noot: &Noot<T>): bool {
         option::is_some(&noot.transfer_cap)
     }
 
-    public fun is_linked<T>(transfer_cap: &TransferCap<T>, noot: &Noot<T>): bool {
+    public fun is_correct_transfer_cap<T>(transfer_cap: &TransferCap<T>, noot: &Noot<T>): bool {
         transfer_cap.for == object::id(noot)
     }
 

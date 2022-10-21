@@ -1,4 +1,6 @@
-module openrails::rand {
+// This should eventually be in the sui framework
+
+module noot::rand {
     const EBAD_RANGE: u64 = 0;
 
     // Generates an integer from the range [min, max), not inclusive of max

@@ -1,4 +1,4 @@
-module openrails::degods {
+module noot_examples::degods {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
@@ -8,20 +8,19 @@ module openrails::degods {
     use std::string::{Self, String};
     use std::option;
     use std::vector;
-    use openrails::noot::{Self, Noot};
-    use openrails::rand;
+    use noot::noot::{Self, Noot};
+    use noot::rand;
+    use noot::dispenser;
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const EDISPENSER_LOCKED: u64 = 2;
 
     struct WITNESS has drop {}
 
+    // Noot type
     struct Degods has drop {}
 
-    struct AdminCap has key, store {
-        id: UID
-    }
-
+    // Noot data type
     struct Traits has store {
         id: UID,
         background: String,
@@ -36,45 +35,20 @@ module openrails::degods {
         y00t: bool
     }
 
-    struct NootDNA has store {
-        display: VecMap<String, String>,
-        body: Traits
-    }
-
-    struct NootDispenser has key {
-        id: UID,
-        price: u64,
-        treasury_addr: address,
-        locked: bool,
-        contents: vector<NootDNA>,
-    }
-
-    // Give the admin capability to the address that deployed this module
+    // Give admin capabilities to the address that deployed this module
     fun init(witness: WITNESS, ctx: &mut TxContext) {
         let addr = tx_context::sender(ctx);
-        let royalty_cap = noot::create_collection(witness, Degods {}, ctx);
 
-        let admin_cap = AdminCap { id: object::new(ctx) };
-        transfer::transfer(admin_cap, addr);
+        let noot_type_info = noot::create_type(witness, Degods {}, ctx);
+        let royalty_cap = market::create_market(Degods {}, ctx);
+        let dispenser_cap = dispenser::create_dispenser(Degods {});
+
+        transfer::transfer(noot_type_info, addr);
         transfer::transfer(royalty_cap, addr);
+        transfer::transfer(dispenser_cap, addr);
     }
 
-    public entry fun create_dispenser_(admin_cap: &AdminCap, price: u64, treasury_addr: address, ctx: &mut TxContext) {
-        let noot_dispenser = create_dispenser(admin_cap, price, treasury_addr, ctx);
-        transfer::share_object(noot_dispenser);
-    }
-
-    public fun create_dispenser(_admin_cap: &AdminCap, price: u64, treasury_addr: address, ctx: &mut TxContext): NootDispenser {
-        NootDispenser {
-            id: object::new(ctx),
-            price,
-            treasury_addr,
-            locked: true,
-            contents: vector::empty<NootDNA>()
-        }
-    }
-
-    public entry fun load_noot_dispenser(_admin_cap: &AdminCap, dispenser: &mut NootDispenser, traits: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun load_dispenser(_dispenser_cap: &AdminCap, dispenser: &mut NootDispenser, traits: vector<vector<u8>>, ctx: &mut TxContext) {
         let body = Traits {
             id: object::new(ctx),
             background: string::utf8(*vector::borrow(&traits, 0)),
@@ -90,23 +64,11 @@ module openrails::degods {
         };
 
         let display = vec_map::empty<String, String>();
-        vec_map::insert(&mut display, string::utf8(b"https:png"), string::utf8(*vector::borrow(&traits, 9)));
+        vec_map::insert(&mut display, string::utf8(b"name"), string::utf8(*vector::borrow(&traits, 9)));
+        vec_map::insert(&mut display, string::utf8(b"https:png"), string::utf8(*vector::borrow(&traits, 10)));
 
-        let noot_dna = NootDNA {
-            display,
-            body
-        };
-
-        vector::push_back(&mut dispenser.contents, noot_dna);
+        dispenser::load_dispenser(dispenser, display, body);
     }
-
-    public entry fun unload_noot_dispenser_() {}
-
-    public fun unload_noot_dispenser() {}
-
-    public entry fun lock_dispenser() {}
-
-    public entry fun unlock_dispenser() {}
 
     public entry fun craft_(coin: Coin<SUI>, send_to: address, dispenser: &mut NootDispenser, ctx: &mut TxContext) {
         let noot = craft(coin, send_to, dispenser, ctx);

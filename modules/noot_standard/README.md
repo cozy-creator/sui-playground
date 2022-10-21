@@ -80,6 +80,7 @@ Property As Code (PaC)
 - Show example implementation with different royalties
 - Think about auctions
 - The Sui core includes a url standard with has commits of content; that could be useful. Perhaps integrate that
+- Implement actual randomness
 
 ### Problems to Solve
 

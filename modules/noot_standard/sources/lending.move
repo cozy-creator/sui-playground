@@ -1,6 +1,9 @@
 module noot::lending {
-    struct ReclaimCapability<phantom T> has key, store {
+    use sui::object::UID;
+    use noot::noot::TransferCap;
+
+    struct ReclaimCapability<phantom T, phantom M> has key, store {
         id: UID,
-        transfer_cap: TransferCap<T>
+        transfer_cap: TransferCap<T, M>
     }
 }

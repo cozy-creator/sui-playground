@@ -69,7 +69,12 @@ module noot_examples::outlaw_sky {
         transfer::transfer(noot, send_to);
     }
 
-    public fun craft(coin: Coin<SUI>, owner: address, craft_info: &mut CraftInfo, ctx: &mut TxContext): Noot<OUTLAW_SKY> {
+    public fun craft(
+        coin: Coin<SUI>, 
+        owner: address, 
+        craft_info: &mut CraftInfo, 
+        ctx: &mut TxContext): Noot<OUTLAW_SKY> 
+    {
         let price = *&craft_info.price;
         assert!(coin::value(&coin) >= price, EINSUFFICIENT_FUNDS);
         noot::take_coin_and_transfer(craft_info.treasury_addr, &mut coin, price, ctx);
@@ -78,7 +83,6 @@ module noot_examples::outlaw_sky {
         let (display, body) = generate_data(ctx);
 
         let noot_data = noot::create_data(OUTLAW_SKY {}, display, body, ctx);
-
         let noot = noot::craft(OUTLAW_SKY {}, option::some(owner), &noot_data, ctx);
 
         transfer::share_object(noot_data);

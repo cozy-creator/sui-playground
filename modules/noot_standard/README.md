@@ -2,6 +2,11 @@
 
 **Noot:** a programmable unit of ownership. (plural: noots)
 
+### Why We Built This
+
+- A standard way to store and display data
+- A standard set of market-contracts
+
 **Craft:** accepts inputs, creates and returns a noot.
 
 **Deconstruct:** accepts a noot, destroys it, and then returns any residual output.
@@ -17,10 +22,6 @@
 **Partially Owned Noot:** a noot is 'partially owned' if its transfer_cap is outside of itself. The noot CAN be claimed by an external process.
 
 **Noot Dispenser:** a module that is pre-loaded with a fixed supply of NootDNA. It accepts coins, and returns NootDNA, which is used to craft a Noot.
-
-### Why We Built This
-
--
 
 ### Downsides
 

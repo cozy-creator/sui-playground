@@ -1,4 +1,4 @@
-module noot::market {
+module noot::closed_market {
     use sui::object::{UID, ID};
     use sui::coin::{Self, Coin};
     use sui::tx_context::{Self, TxContext};
@@ -12,18 +12,20 @@ module noot::market {
     const ENO_TRANSFER_PERMISSION: u64 = 1;
     const EINSUFFICIENT_FUNDS: u64 = 2;
 
+    struct Market has drop {}
+
     // transfer_Cap is only optional until shared objects can be deleted in Sui.
     // This is because after an offer is sold, we cannot delete it becasue it's a
     // shared object, but it also no longer has its transfer cap, so it can no longer
     // be used
-    struct SellOffer<phantom C, phantom T> has key, store {
+    struct SellOffer<phantom C, phantom T, phantom M> has key, store {
         id: UID,
         pay_to: address,
         price: u64,
         royalty_addr: address,
         seller_royalty: u64,
         market_fee: u64,
-        transfer_cap: option::Option<TransferCap<T>>
+        transfer_cap: option::Option<TransferCap<T, M>>
     }
 
     struct BuyOffer<phantom C, phantom T> has key, store {
@@ -33,7 +35,7 @@ module noot::market {
         offer: Coin<C>
     }
 
-        // May be a shared or owned object. Used in the buy_noot function call to pay
+    // May be a shared or owned object. Used in the buy_noot function call to pay
     // royalties. Multiple Royalty objects may exist per `T`. Noots cannot be bought or
     // sold without access to a Royalty object.
     struct Royalty<phantom T> has key, store {
@@ -43,12 +45,13 @@ module noot::market {
     }
 
     // Owned object, kept by the creator. Used to create Royalty objects of type `T`
-    // or change them. Only one will ever exist per `T`
+    // or change them. We allow multiple of these to exist, but only the module defining
+    // the type `T` can create them
     struct RoyaltyCap<phantom T> has key, store {
         id: UID
     }
 
-    public fun create_market<T: drop>(_witness: T, ctx: &mut TxContext): RoyaltyCap<T> {
+    public fun create_royalty_cap<T: drop>(_witness: T, ctx: &mut TxContext): RoyaltyCap<T> {
         RoyaltyCap<T> {
             id: object::new(ctx)
         }
@@ -80,13 +83,13 @@ module noot::market {
         royalty.fee_bps = new_fee_bps;    
     }
 
-    public entry fun create_sell_offer_<C, T>(price: u64, noot: &mut Noot<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+    public entry fun create_sell_offer_<C, T: drop>(price: u64, noot: &mut Noot<T, Market>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         // Assert that the owner of this Noot is sending this tx
         assert!(noot::is_owner<T>(tx_context::sender(ctx), noot), ENOT_OWNER);
         // Assert that the transfer cap still exists within the Noot
-        assert!(option::is_some<T>(&noot.transfer_cap), ENO_TRANSFER_PERMISSION);
+        assert!(noot::is_fully_owned<T>(noot), ENO_TRANSFER_PERMISSION);
 
-        let transfer_cap = option::extract(&mut noot.transfer_cap);
+        let transfer_cap = noot::extract_transfer_cap(Market {}, noot);
         let pay_to = tx_context::sender(ctx);
         create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }

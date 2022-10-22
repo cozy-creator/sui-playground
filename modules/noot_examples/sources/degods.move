@@ -10,7 +10,8 @@ module noot_examples::degods {
     use std::vector;
     use noot::noot::{Self, Noot};
     use noot::rand;
-    use noot::dispenser;
+    use noot::dispenser::{Self, Dispenser, DispenserCap};
+    use noot::closed_market::{Self, Market};
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const EDISPENSER_LOCKED: u64 = 2;
@@ -21,8 +22,7 @@ module noot_examples::degods {
     struct Degods has drop {}
 
     // Noot data type
-    struct Traits has store {
-        id: UID,
+    struct Traits has store, copy, drop {
         background: String,
         skin: String,
         specialty: String,
@@ -40,12 +40,12 @@ module noot_examples::degods {
         let addr = tx_context::sender(ctx);
 
         let noot_type_info = noot::create_type(witness, Degods {}, ctx);
-        let royalty_cap = market::create_market(Degods {}, ctx);
-        let dispenser_cap = dispenser::create_dispenser(Degods {});
+        let royalty_cap = closed_market::create_royalty_cap(Degods {}, ctx);
 
         transfer::transfer(noot_type_info, addr);
         transfer::transfer(royalty_cap, addr);
-        transfer::transfer(dispenser_cap, addr);
+
+        dispenser::create_<Traits>(10, tx_context::sender(ctx), ctx);
     }
 
     // This has to be called once for every noot that will be available in the container
@@ -53,9 +53,13 @@ module noot_examples::degods {
     // each time.
     // You can call noot::dispenser::unload_dispenser along with the corresponding index if you
     // want to remove the data
-    public entry fun load_dispenser(_dispenser_cap: &AdminCap, dispenser: &mut NootDispenser, traits: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun load_dispenser(
+        dispenser_cap: &DispenserCap<Traits>,
+        dispenser: &mut Dispenser<Traits>,
+        traits: vector<vector<u8>>,
+        ctx: &mut TxContext) 
+    {
         let body = Traits {
-            id: object::new(ctx),
             background: string::utf8(*vector::borrow(&traits, 0)),
             skin: string::utf8(*vector::borrow(&traits, 1)),
             specialty: string::utf8(*vector::borrow(&traits, 2)),
@@ -72,34 +76,34 @@ module noot_examples::degods {
         vec_map::insert(&mut display, string::utf8(b"name"), string::utf8(*vector::borrow(&traits, 9)));
         vec_map::insert(&mut display, string::utf8(b"https:png"), string::utf8(*vector::borrow(&traits, 10)));
 
-        dispenser::load_dispenser(dispenser, display, body);
+        dispenser::load(dispenser_cap, dispenser, display, body, ctx);
     }
 
-    public entry fun craft_(coin: Coin<SUI>, send_to: address, dispenser: &mut NootDispenser, ctx: &mut TxContext) {
+    public entry fun craft_(
+        coin: Coin<SUI>,
+        send_to: address,
+        dispenser: &mut Dispenser<Traits>,
+        ctx: &mut TxContext)
+    {
         let noot = craft(coin, send_to, dispenser, ctx);
         noot::transfer(Degods {}, noot, send_to);
     }
 
-    public fun craft(coin: Coin<SUI>, owner: address, dispenser: &mut NootDispenser, ctx: &mut TxContext): Noot<Degods> {
-        assert!(!dispenser.locked, EDISPENSER_LOCKED);
-        let price = dispenser.price;
-        assert!(coin::value(&coin) >= price, EINSUFFICIENT_FUNDS);
-
-        noot::take_coin_and_transfer(dispenser.treasury_addr, &mut coin, price, ctx);
-        noot::refund(coin, ctx);
-
-        let length = vector::length(&dispenser.contents);
-        let index = rand::rng(0, length);
-        let NootDNA { display, body } = vector::remove(&mut dispenser.contents, index);
+    public fun craft(
+        coin: Coin<SUI>,
+        owner: address,
+        dispenser: &mut Dispenser<Traits>,
+        ctx: &mut TxContext): Noot<Degods, Market>
+    {
+        let (display, body) = dispenser::buy_from(coin, dispenser, ctx);
 
         let data = noot::create_data<Degods, Traits>(Degods {}, display, body, ctx);
-        let noot = noot::craft(Degods {}, option::some(owner), &data, ctx);
+
+        // TO DO: make sure this line's security works; it might need to be called from within the
+        // market module instead
+        let noot = noot::craft<Degods, Market, Traits>(Degods {}, option::some(owner), &data, ctx);
 
         noot::share_data(Degods {}, data);
         noot
     }
-
-    // public(friend) fun give_witness(): Degods {
-    //     Degods {}
-    // }
 }

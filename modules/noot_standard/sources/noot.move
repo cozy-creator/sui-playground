@@ -9,7 +9,9 @@ module noot::noot {
     const EBAD_WITNESS: u64 = 0;
     const ENOT_OWNER: u64 = 1;
     const ENO_TRANSFER_PERMISSION: u64 = 2;
-    const EINSUFFICIENT_FUNDS: u64 = 3;
+    const EWRONG_TRANSFER_CAP: u64 = 3;
+    const ETRANSFER_CAP_ALREADY_EXISTS: u64 = 4;
+    const EINSUFFICIENT_FUNDS: u64 = 5;
 
     // Do not add 'store' to Noot or NootData. Keeping them non-storable means that they cannot be
     // transferred using polymorphic transfer (transfer::transfer), meaning the market can define its
@@ -34,6 +36,7 @@ module noot::noot {
         for: ID
     }
 
+    // One one of these will exist per noot-type, and they will initially be owned by the type creator
     struct NootTypeInfo<phantom T> has key {
         id: UID,
         display: VecMap<String, String>
@@ -53,7 +56,7 @@ module noot::noot {
     // that there will only ever be one of each cap per `T`.
     public fun create_type<W: drop, T: drop>(
         one_time_witness: W,
-        type_witness: T,
+        _type_witness: T,
         ctx: &mut TxContext
     ): NootTypeInfo<T> {
         // Make sure there's only one instance of the type T
@@ -143,6 +146,16 @@ module noot::noot {
         transfer_cap
     }
 
+    // In the future, when Sui supports destroying multi-writer objects, this function will completely
+    // consume the noot, destroy it, then re-create it as a single-writer object, which will be fully-owned
+    // because the transfer_cap is now present inside of it again. At which point the single-writer noot
+    // will be returned by this transaction or sent to the sender of this transaction
+    public fun fill_transfer_cap<T: drop, M: drop>(noot: &mut Noot<T, M>, transfer_cap: TransferCap<T, M>) {
+        assert!(is_correct_transfer_cap(noot, &transfer_cap), EWRONG_TRANSFER_CAP);
+        assert!(!is_fully_owned(noot), ETRANSFER_CAP_ALREADY_EXISTS);
+        option::fill(&mut noot.transfer_cap, transfer_cap);
+    }
+
     // === Transfers restricted to using the Transfer-Cap ===
 
     // TODO: when multi-writer objects can be deleted, this function should take noots by
@@ -163,7 +176,7 @@ module noot::noot {
         noot: &mut Noot<T, M>,
         new_owner: address)
     {
-        assert!(is_correct_transfer_cap(transfer_cap, noot), ENO_TRANSFER_PERMISSION);
+        assert!(is_correct_transfer_cap(noot, transfer_cap), ENO_TRANSFER_PERMISSION);
         noot.owner = option::some(new_owner);
     }
 
@@ -193,7 +206,7 @@ module noot::noot {
 
     // === Authority Checking Functions ===
 
-    public fun is_owner<T>(addr: address, noot: &Noot<T>): bool {
+    public fun is_owner<T, M>(addr: address, noot: &Noot<T, M>): bool {
         if (option::is_some(&noot.owner)) {
             *option::borrow(&noot.owner) == addr
         } else {
@@ -201,7 +214,10 @@ module noot::noot {
         }
     }
 
-    public fun is_correct_data<T, D: store>(noot: &Noot<T>, noot_data: &NootData<T, D>): bool {
+    public fun is_correct_data<T, M, D: store + copy + drop>(
+        noot: &Noot<T, M>,
+        noot_data: &NootData<T, D>): bool
+    {
         if (option::is_none(&noot.data_id)) {
             return false
         };
@@ -209,11 +225,11 @@ module noot::noot {
         (data_id == &object::id(noot_data))
     }
 
-    public fun is_fully_owned<T>(noot: &Noot<T>): bool {
+    public fun is_fully_owned<T, M>(noot: &Noot<T, M>): bool {
         option::is_some(&noot.transfer_cap)
     }
 
-    public fun is_correct_transfer_cap<T>(transfer_cap: &TransferCap<T>, noot: &Noot<T>): bool {
+    public fun is_correct_transfer_cap<T, M>(noot: &Noot<T, M>, transfer_cap: &TransferCap<T, M>): bool {
         transfer_cap.for == object::id(noot)
     }
 }

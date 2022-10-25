@@ -1,17 +1,15 @@
 module noot_examples::degods {
-    use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::{Self};
     use sui::transfer;
-    use sui::coin::{Self, Coin};
+    use sui::coin::{Coin};
     use sui::sui::SUI;
     use std::string::{Self, String};
     use std::option;
     use std::vector;
     use noot::noot::{Self, Noot};
-    use noot::rand;
     use noot::dispenser::{Self, Dispenser, DispenserCap};
-    use noot::closed_market::{Self, Market};
+    use noot::royalty_market::{Self, Market};
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const EDISPENSER_LOCKED: u64 = 2;
@@ -40,12 +38,12 @@ module noot_examples::degods {
         let addr = tx_context::sender(ctx);
 
         let noot_type_info = noot::create_type(witness, Degods {}, ctx);
-        let royalty_cap = closed_market::create_royalty_cap(Degods {}, ctx);
+        let royalty_cap = royalty_market::create_royalty_cap(Degods {}, ctx);
 
         transfer::transfer(noot_type_info, addr);
         transfer::transfer(royalty_cap, addr);
 
-        dispenser::create_<Traits>(10, tx_context::sender(ctx), ctx);
+        dispenser::create_<SUI, Traits>(10, tx_context::sender(ctx), ctx);
     }
 
     // This has to be called once for every noot that will be available in the container
@@ -54,8 +52,8 @@ module noot_examples::degods {
     // You can call noot::dispenser::unload_dispenser along with the corresponding index if you
     // want to remove the data
     public entry fun load_dispenser(
-        dispenser_cap: &DispenserCap<Traits>,
-        dispenser: &mut Dispenser<Traits>,
+        dispenser_cap: &DispenserCap<SUI, Traits>,
+        dispenser: &mut Dispenser<SUI, Traits>,
         traits: vector<vector<u8>>,
         ctx: &mut TxContext) 
     {
@@ -82,7 +80,7 @@ module noot_examples::degods {
     public entry fun craft_(
         coin: Coin<SUI>,
         send_to: address,
-        dispenser: &mut Dispenser<Traits>,
+        dispenser: &mut Dispenser<SUI, Traits>,
         ctx: &mut TxContext)
     {
         let noot = craft(coin, send_to, dispenser, ctx);
@@ -92,7 +90,7 @@ module noot_examples::degods {
     public fun craft(
         coin: Coin<SUI>,
         owner: address,
-        dispenser: &mut Dispenser<Traits>,
+        dispenser: &mut Dispenser<SUI, Traits>,
         ctx: &mut TxContext): Noot<Degods, Market>
     {
         let (display, body) = dispenser::buy_from(coin, dispenser, ctx);

@@ -5,8 +5,6 @@ module noot::dispenser {
     use sui::transfer;
     use sui::object;
     use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
-    use noot::noot::{Self, Noot};
     use noot::coin2;
     use noot::rand;
     use std::vector;
@@ -16,7 +14,7 @@ module noot::dispenser {
     const EDISPENSER_LOCKED: u64 = 1;
     const EINSUFFICIENT_FUNDS: u64 = 2;
 
-    struct Dispenser<D> has key, store {
+    struct Dispenser<phantom C, D> has key, store {
         id: UID,
         price: u64,
         treasury_addr: address,
@@ -29,33 +27,33 @@ module noot::dispenser {
         body: D
     }
 
-    struct DispenserCap<phantom D> has key, store {
+    struct DispenserCap<phantom C, phantom D> has key, store {
         id: UID,
         for: ID
     }
 
     // ============ Admin Functions ===========
 
-    public entry fun create_<D: store>(
+    public entry fun create_<C, D: store>(
         price: u64, 
         treasury_addr: address, 
         ctx: &mut TxContext) 
     {
-        let (dispenser, dispenser_cap) = create<D>(price, treasury_addr, ctx);
+        let (dispenser, dispenser_cap) = create<C, D>(price, treasury_addr, ctx);
 
         transfer::share_object(dispenser);
         transfer::transfer(dispenser_cap, tx_context::sender(ctx));
     }
 
-    public fun create<D: store>(
+    public fun create<C, D: store>(
         price: u64, 
         treasury_addr: address, 
-        ctx: &mut TxContext): (Dispenser<D>, DispenserCap<D>) 
+        ctx: &mut TxContext): (Dispenser<C, D>, DispenserCap<C, D>) 
     {
         let uid = object::new(ctx);
         let id = object::uid_to_inner(&uid);
 
-        let dispenser = Dispenser {
+        let dispenser = Dispenser<C, D> {
             id: uid,
             price,
             treasury_addr,
@@ -63,7 +61,7 @@ module noot::dispenser {
             contents: vector::empty<Capsule<D>>()
         };
 
-        let dispenser_cap = DispenserCap<D> {
+        let dispenser_cap = DispenserCap<C, D> {
             id: object::new(ctx),
             for: id
         };
@@ -73,12 +71,12 @@ module noot::dispenser {
 
     public entry fun delete<D: store>() {}
 
-    public entry fun load<D: store>(
-        dispenser_cap: &DispenserCap<D>, 
-        dispenser: &mut Dispenser<D>, 
+    public entry fun load<C, D: store>(
+        dispenser_cap: &DispenserCap<C, D>, 
+        dispenser: &mut Dispenser<C, D>, 
         display: VecMap<String, String>, 
         body: D, 
-        ctx: &mut TxContext)
+        _ctx: &mut TxContext)
     {
         assert!(is_correct_dispenser_cap(dispenser_cap, dispenser), ENOT_AUTHORIZED);
         vector::push_back(&mut dispenser.contents, Capsule { display, body });
@@ -98,9 +96,9 @@ module noot::dispenser {
 
     // ============ User Functions ===========
 
-    public fun buy_from<D: store>(
-        coin: Coin<SUI>,
-        dispenser: &mut Dispenser<D>,
+    public fun buy_from<C, D: store>(
+        coin: Coin<C>,
+        dispenser: &mut Dispenser<C, D>,
         ctx: &mut TxContext): (VecMap<String, String>, D)
     {
         assert!(is_unlocked(dispenser), EDISPENSER_LOCKED);
@@ -119,20 +117,20 @@ module noot::dispenser {
 
     // ============ Authority-Checking Functions ===========
 
-    public fun is_correct_dispenser_cap<D: store>(
-        dispenser_cap: &DispenserCap<D>, 
-        dispenser: &Dispenser<D>): bool 
+    public fun is_correct_dispenser_cap<C, D: store>(
+        dispenser_cap: &DispenserCap<C, D>, 
+        dispenser: &Dispenser<C, D>): bool 
     {
         (dispenser_cap.for == object::id(dispenser))
     }
 
-    public fun is_unlocked<D: store>(dispenser: &Dispenser<D>): bool {
+    public fun is_unlocked<C, D: store>(dispenser: &Dispenser<C, D>): bool {
         dispenser.locked
     }
 
     // ============ Read Functions ===========
 
-    public fun get_dispenser_id<D>(dispenser_cap: &DispenserCap<D>): ID {
+    public fun get_dispenser_id<C, D: store>(dispenser_cap: &DispenserCap<C, D>): ID {
         dispenser_cap.for
     }
 }

@@ -1,4 +1,4 @@
-module noot::closed_market {
+module noot::royalty_market {
     use sui::object::{UID, ID};
     use sui::coin::{Self, Coin};
     use sui::tx_context::{Self, TxContext};
@@ -18,14 +18,14 @@ module noot::closed_market {
     // This is because after an offer is sold, we cannot delete it becasue it's a
     // shared object, but it also no longer has its transfer cap, so it can no longer
     // be used
-    struct SellOffer<phantom C, phantom T, phantom M> has key, store {
+    struct SellOffer<phantom C, phantom T> has key, store {
         id: UID,
         pay_to: address,
         price: u64,
         royalty_addr: address,
         seller_royalty: u64,
         market_fee: u64,
-        transfer_cap: option::Option<TransferCap<T, M>>
+        transfer_cap: option::Option<TransferCap<T, Market>>
     }
 
     struct BuyOffer<phantom C, phantom T> has key, store {
@@ -80,21 +80,25 @@ module noot::closed_market {
     // Do we really need this function? Isn't creating and destroying enough?
     public entry fun change_royalty<T>(royalty: &mut Royalty<T>, new_pay_to: address, new_fee_bps: u64, _royalty_cap: &RoyaltyCap<T>) {
         royalty.pay_to = new_pay_to;
-        royalty.fee_bps = new_fee_bps;    
+        royalty.fee_bps = new_fee_bps;
     }
 
-    public entry fun create_sell_offer_<C, T: drop>(price: u64, noot: &mut Noot<T, Market>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
-        // Assert that the owner of this Noot is sending this tx
-        assert!(noot::is_owner<T>(tx_context::sender(ctx), noot), ENOT_OWNER);
+    // In order to do this, the noot must be single-writer, and owned by the transaction-sender
+    // as such, the is_owner is kind of redundant. This fully consumes the noot, and shares it. Once
+    // shared resources can be consumed (and not just referenced) by transactions in Sui, the
+    // is_owner check will make more sense.
+    public entry fun create_sell_offer_<C, T: drop>(price: u64, noot: Noot<T, Market>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         // Assert that the transfer cap still exists within the Noot
-        assert!(noot::is_fully_owned<T>(noot), ENO_TRANSFER_PERMISSION);
+        assert!(noot::is_fully_owned<T, Market>(&noot), ENO_TRANSFER_PERMISSION);
+        // Assert that the owner of this Noot is sending this tx
+        assert!(noot::is_owner<T, Market>(tx_context::sender(ctx), &noot), ENOT_OWNER);
 
-        let transfer_cap = noot::extract_transfer_cap(Market {}, noot);
+        let transfer_cap = noot::extract_transfer_cap(Market {}, noot, ctx);
         let pay_to = tx_context::sender(ctx);
         create_sell_offer<C,T>(pay_to, price, transfer_cap, royalty, market_bps, ctx);
     }
 
-    public fun create_sell_offer<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
+    public fun create_sell_offer<C, T>(pay_to: address, price: u64, transfer_cap: TransferCap<T, Market>, royalty: &Royalty<T>, market_bps: u64, ctx: &mut TxContext) {
         let for_sale = SellOffer<C, T> {
             id: object::new(ctx),
             pay_to,
@@ -111,12 +115,12 @@ module noot::closed_market {
     // Once Sui supports passing shared objects by value, rather than just reference, this function
     // will change to consume the shared SellOffer wrapper, and delete it.
     // Note that the new_owner does not necessarily have to be the sender of the transaction
-    public entry fun fill_sell_offer_<C, T: drop>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, noot: &mut Noot<T>, ctx: &mut TxContext) {
+    public entry fun fill_sell_offer_<C, T: drop>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, new_owner: address, royalty: &Royalty<T>, market_addr: address, noot: &mut Noot<T, Market>, ctx: &mut TxContext) {
         let transfer_cap = fill_sell_offer(for_sale, coin, royalty, market_addr, ctx);
         noot::transfer_and_fully_own(new_owner, noot, transfer_cap);
     }
 
-    public fun fill_sell_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, royalty: &Royalty<T>, market_addr: address, ctx: &mut TxContext): TransferCap<T> {
+    public fun fill_sell_offer<C, T>(for_sale: &mut SellOffer<C, T>, coin: Coin<C>, royalty: &Royalty<T>, market_addr: address, ctx: &mut TxContext): TransferCap<T, Market> {
         assert!(option::is_some(&for_sale.transfer_cap), ENO_TRANSFER_PERMISSION);
 
         let buyer_royalty = ((for_sale.price as u128) * (royalty.fee_bps as u128) / 10000 / 2 as u64);
@@ -142,17 +146,16 @@ module noot::closed_market {
     }
 
     // SellOffer is a shared object and cannot be deleted. In the future, we will be able to delete it
-    public entry fun cancel_sell_offer<C, T>(
+    public entry fun cancel_sell_offer<C, T: drop>(
         for_sale: &mut SellOffer<C,T>, 
-        noot: &mut Noot<T>, 
+        noot: &mut Noot<T, Market>, 
         ctx: &mut TxContext) 
     {
-        let addr = tx_context::sender(ctx);
-        assert!(addr == *option::borrow(&noot.owner), ENOT_OWNER);
+        assert!(noot::is_owner<T, Market>(tx_context::sender(ctx), noot), ENOT_OWNER);
 
         let transfer_cap = option::extract(&mut for_sale.transfer_cap);
-        assert!(transfer_cap.for == object::id(noot), ENO_TRANSFER_PERMISSION);
-        option::fill(&mut noot.transfer_cap, transfer_cap);
+        assert!(noot::is_correct_transfer_cap(noot, &transfer_cap), ENO_TRANSFER_PERMISSION);
+        noot::fill_transfer_cap(noot, transfer_cap);
     }
 
     public entry fun create_buy_offer() {}

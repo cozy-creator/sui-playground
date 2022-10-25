@@ -76,13 +76,16 @@ Property As Code (PaC)
 
 ### To Do
 
+- Move this to its own repo
+- Packages: standard, crafting, data, market, examples
 - Add the 'Buy offer' functionality
-- Show example implementation with Outlaw Sky; how do to do mints?
+- Abstract Outlaw Sky to be an inventory-generator
 - Show example implementation with different royalties
 - Think about auctions
-- The Sui core includes a url standard with has commits of content; that could be useful. Perhaps integrate that
+- Build an open-market
 - Implement actual randomness
 - Perhaps the market should define the transfer cap of a noot?
+- The Sui core includes a url standard with has commits of content; that could be useful. Perhaps integrate that
 - See if we can transfer a Noot from being part of market-A to market-B. This would be ideal for closing or opening transfer abilities of a noot (even within the same type).
 - For extract_owner_cap, perhaps we should drop the is_owner requirement; what if we want some markets to be able to take transfer_caps, even without the owner's consent???
 - Perhaps type-info should have 'store', so that it can be shared as well? It might be useful to give type-info to programs so that they can edit type-info arbitrarily; for example, suppose type-info is being controlled by a module rather than a person (keypair)

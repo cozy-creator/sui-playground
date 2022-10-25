@@ -15,8 +15,11 @@ module noot_examples::outlaw_sky {
     const ENOT_OWNER: u64 = 2;
     const EWRONG_DATA: u64 = 3;
 
-    struct WITNESS has drop {}
+    // One-time witness
+    struct OUTLAW_SKY has drop {}
 
+    // Noot-type. I'm kind of changing naming-conventions here by using Outlaw_Sky rather than
+    // OutlawSky (camel case)
     struct Outlaw_Sky has drop {}
 
     // NOTE: this data is meant to be compact, rather than explanative. For the indexer, we'll
@@ -40,7 +43,7 @@ module noot_examples::outlaw_sky {
         max_supply: u64
     }
 
-    fun init(one_time_witness: WITNESS, ctx: &mut TxContext) {
+    fun init(one_time_witness: OUTLAW_SKY, ctx: &mut TxContext) {
         let addr = tx_context::sender(ctx);
 
         let noot_type_info = noot::create_type(one_time_witness, Outlaw_Sky {}, ctx);
@@ -55,7 +58,7 @@ module noot_examples::outlaw_sky {
             max_supply: 10000
         };
 
-        transfer::transfer(noot_type_info, addr);
+        noot::transfer_type_info(noot_type_info, addr);
         transfer::transfer(royalty_cap, addr);
         transfer::share_object(craft_info);
     }
@@ -67,7 +70,7 @@ module noot_examples::outlaw_sky {
         ctx: &mut TxContext)
     {
         let noot = craft(coin, send_to, craft_info, ctx);
-        transfer::transfer(noot, send_to);
+        noot::transfer(Outlaw_Sky {}, noot, send_to);
     }
 
     public fun craft<C>(
@@ -86,7 +89,7 @@ module noot_examples::outlaw_sky {
         let noot_data = noot::create_data(Outlaw_Sky {}, display, body, ctx);
         let noot = noot::craft<Outlaw_Sky, Market, TraitMap>(Outlaw_Sky {}, option::some(owner), &noot_data, ctx);
 
-        transfer::share_object(noot_data);
+        noot::share_data(Outlaw_Sky {}, noot_data);
         noot
     }
 

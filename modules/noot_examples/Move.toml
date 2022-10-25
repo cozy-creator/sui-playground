@@ -8,5 +8,5 @@ NootStandard = { local = "../noot_standard" }
 
 [addresses]
 noot_examples = "0x0"
-noot =  "0x0"
-sui =  "0000000000000000000000000000000000000002"
+noot = "0x3"
+sui = "0x2"

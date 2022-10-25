@@ -204,6 +204,14 @@ module noot::noot {
         transfer::share_object(noot_data);
     }
 
+    // === TypeInfo Functions ===
+
+    // TypeInfo does not have 'store', meaning that external modules cannot use the transfer::transfer
+    // polymorphic transfer in order to change ownership. As such this function is necessary
+    public entry fun transfer_type_info<T>(type_info: NootTypeInfo<T>, send_to: address) {
+        transfer::transfer(type_info, send_to);
+    }
+
     // === Authority Checking Functions ===
 
     public fun is_owner<T, M>(addr: address, noot: &Noot<T, M>): bool {

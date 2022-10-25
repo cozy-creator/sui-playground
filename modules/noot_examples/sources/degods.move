@@ -14,7 +14,8 @@ module noot_examples::degods {
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const EDISPENSER_LOCKED: u64 = 2;
 
-    struct WITNESS has drop {}
+    // One-time-witness; must be all-caps and same-name as the module
+    struct DEGODS has drop {}
 
     // Noot type
     struct Degods has drop {}
@@ -34,13 +35,13 @@ module noot_examples::degods {
     }
 
     // Give admin capabilities to the address that deployed this module
-    fun init(witness: WITNESS, ctx: &mut TxContext) {
+    fun init(witness: DEGODS, ctx: &mut TxContext) {
         let addr = tx_context::sender(ctx);
 
-        let noot_type_info = noot::create_type(witness, Degods {}, ctx);
+        let type_info = noot::create_type(witness, Degods {}, ctx);
         let royalty_cap = royalty_market::create_royalty_cap(Degods {}, ctx);
 
-        transfer::transfer(noot_type_info, addr);
+        noot::transfer_type_info(type_info, addr);
         transfer::transfer(royalty_cap, addr);
 
         dispenser::create_<SUI, Traits>(10, tx_context::sender(ctx), ctx);
@@ -55,7 +56,7 @@ module noot_examples::degods {
         dispenser_cap: &DispenserCap<SUI, Traits>,
         dispenser: &mut Dispenser<SUI, Traits>,
         traits: vector<vector<u8>>,
-        ctx: &mut TxContext) 
+        _ctx: &mut TxContext) 
     {
         let body = Traits {
             background: string::utf8(*vector::borrow(&traits, 0)),
@@ -74,7 +75,7 @@ module noot_examples::degods {
         vec_map::insert(&mut display, string::utf8(b"name"), string::utf8(*vector::borrow(&traits, 9)));
         vec_map::insert(&mut display, string::utf8(b"https:png"), string::utf8(*vector::borrow(&traits, 10)));
 
-        dispenser::load(dispenser_cap, dispenser, display, body, ctx);
+        dispenser::load(dispenser_cap, dispenser, display, body);
     }
 
     public entry fun craft_(

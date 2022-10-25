@@ -4,7 +4,7 @@
 module noot::coin2 {
     use sui::coin::{Self, Coin};
     use sui::balance;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
     public fun take_from_coin<C>(coin: &mut Coin<C>, value: u64, ctx: &mut TxContext): Coin<C> {
@@ -23,7 +23,7 @@ module noot::coin2 {
     // Refund the sender any extra balance they paid, or destroy the empty coin
     public entry fun refund<C>(coin: Coin<C>, ctx: &mut TxContext) {
         if (coin::value(&coin) > 0) { 
-            coin::keep<C>(coin, ctx);
+            transfer::transfer(coin, tx_context::sender(ctx));
         } else {
             coin::destroy_zero(coin);
         };

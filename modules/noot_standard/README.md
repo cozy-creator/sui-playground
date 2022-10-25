@@ -85,6 +85,7 @@ Property As Code (PaC)
 - Perhaps the market should define the transfer cap of a noot?
 - See if we can transfer a Noot from being part of market-A to market-B. This would be ideal for closing or opening transfer abilities of a noot (even within the same type).
 - For extract_owner_cap, perhaps we should drop the is_owner requirement; what if we want some markets to be able to take transfer_caps, even without the owner's consent???
+- Perhaps type-info should have 'store', so that it can be shared as well? It might be useful to give type-info to programs so that they can edit type-info arbitrarily; for example, suppose type-info is being controlled by a module rather than a person (keypair)
 
 ### Problems to Solve
 

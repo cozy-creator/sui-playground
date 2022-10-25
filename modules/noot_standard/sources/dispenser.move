@@ -7,6 +7,7 @@ module noot::dispenser {
     use sui::coin::{Self, Coin};
     use noot::coin2;
     use noot::rand;
+    use noot::encode;
     use std::vector;
     use std::string::String;
 
@@ -71,12 +72,25 @@ module noot::dispenser {
 
     public entry fun delete<D: store>() {}
 
-    public entry fun load<C, D: store>(
+    // Entry functions in Sui cannot accept non-native types, including vec_map and String. As such, we encode
+    // our would-be display vec_map as a vector, with the even indexes being the key, and the odd
+    // indexes being the value. Strings are expected to be utf8 bytes
+    public entry fun load_<C, D: store>(
+        dispenser_cap: &DispenserCap<C, D>, 
+        dispenser: &mut Dispenser<C, D>, 
+        raw_display: vector<vector<u8>>, 
+        body: D, 
+        _ctx: &mut TxContext)
+    {
+        let display = encode::to_string_string_vec_map(&raw_display);
+        load(dispenser_cap, dispenser, display, body);
+    }
+
+    public fun load<C, D: store>(
         dispenser_cap: &DispenserCap<C, D>, 
         dispenser: &mut Dispenser<C, D>, 
         display: VecMap<String, String>, 
-        body: D, 
-        _ctx: &mut TxContext)
+        body: D)
     {
         assert!(is_correct_dispenser_cap(dispenser_cap, dispenser), ENOT_AUTHORIZED);
         vector::push_back(&mut dispenser.contents, Capsule { display, body });

@@ -77,6 +77,7 @@ Property As Code (PaC)
 ### To Do
 
 - Move this to its own repo
+- Come up with actual data-editing abilities
 - Packages: standard, crafting, data, market, examples
 - Add the 'Buy offer' functionality
 - Abstract Outlaw Sky to be an inventory-generator

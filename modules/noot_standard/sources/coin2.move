@@ -3,7 +3,7 @@
 
 module noot::coin2 {
     use sui::coin::{Self, Coin};
-    use sui::balance;
+    use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
@@ -27,6 +27,14 @@ module noot::coin2 {
         } else {
             coin::destroy_zero(coin);
         };
+    }
+    
+    public entry fun refund_balance<T>(balance: Balance<T>, ctx: &mut TxContext) {
+        if (balance::value(&balance) > 0) {
+            transfer::transfer(coin::from_balance(balance, ctx), tx_context::sender(ctx));
+        } else {
+            balance::destroy_zero(balance);
+        }
     }
 
     // Split coin `self` into multiple coins, each with balance specified

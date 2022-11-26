@@ -22,7 +22,7 @@ module sui_playground::stored_sale {
         data: vector<u8>, // Expand this
         inventory: vector<u8>, // Expand this
         royalty_license: vector<u8>, // Expand this
-        sell_offer: Option<M>
+        sell_offer: Option<M> // Note: we don't need to specify here C, but it will be bound to this implicitly
     }
 
     // Shared or Owned

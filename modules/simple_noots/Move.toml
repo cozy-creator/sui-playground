@@ -1,10 +1,10 @@
 [package]
-name = "SuiNFTStandard"
-version = "0.0.2"
+name = "SimpleNoots"
+version = "0.0.1"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 
 [addresses]
-openrails =  "0x0"
-sui =  "0000000000000000000000000000000000000002"
+sui_playground =  "0x0"
+sui = "0x2"

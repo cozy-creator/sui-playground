@@ -3,7 +3,7 @@ name = "GasBenchmark"
 version = "0.0.1"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "79100a5687881eef489f347629bf5b19e417cc8e" }
 
 [addresses]
 openrails =  "0x0"

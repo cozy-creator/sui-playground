@@ -2,4 +2,5 @@
 sui.log.**
 **.key
 **/build
+*.bpl
 node_modules

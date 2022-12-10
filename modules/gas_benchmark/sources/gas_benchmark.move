@@ -14,6 +14,14 @@ module openrails::gas_benchmark {
         data: string::String
     }
 
+    struct Something has store {
+        module: u64
+    }
+
+    public fun do_something(something: &mut Something) {
+        something.module = 59;
+    }
+
     public entry fun create_owned(data_raw: vector<u8>, ctx: &mut TxContext) {
         let data = string::utf8(data_raw);
         let owned_struct = OwnedStruct {

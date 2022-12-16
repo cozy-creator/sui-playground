@@ -1,0 +1,10 @@
+[package]
+name = "Extensions"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Utils = { git = "https://github.com/0xnoots/noot-utils.git" subdir = "modules", rev = "master" }
+
+[addresses]
+sui_playground = "0x0"

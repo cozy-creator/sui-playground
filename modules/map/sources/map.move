@@ -1,4 +1,4 @@
-module sui_playground::map {
+module sui_playground::map2 {
     use std::option::{Self, Option};
     use std::vector;
     use sui::dynamic_field;

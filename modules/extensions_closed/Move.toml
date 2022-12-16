@@ -1,11 +1,9 @@
 [package]
-name = "Map"
+name = "SetField"
 version = "0.1.0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
-SuiUtilities = { git = "https://github.com/0xnoots/sui-utilities.git", subdir = "modules", rev = "master" }
 
 [addresses]
-utils = "0x52a6802a69635b6bd19546dd642f5f41b6c730ef"
 sui_playground = "0x0"

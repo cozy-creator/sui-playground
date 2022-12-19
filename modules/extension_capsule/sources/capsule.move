@@ -1,5 +1,8 @@
 module sui_playground::outlaw_sky {
     use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID};
+    use sui_playground::capsule;
+    use sui_playground::royalty_market::Royalty_Market;
 
     // Error constants
     const ENOT_OWNER: u64 = 0;
@@ -12,19 +15,24 @@ module sui_playground::outlaw_sky {
         id: UID
     }
 
-    public fun craft_outlaw(ctx: &mut TxContext): Outlaw {
-        let id = object::new(ctx);
-        module_authority::bind<Outlaw_Sky>(&mut id);
-        owner_authority::bind(Outlaw_Sky {}, &mut id, tx_context::sender(ctx));
-        Outlaw { id, owner: tx_context::sender(ctx) }
+    public fun craft_outlaw(ctx: &mut TxContext) {
+        let outlaw = Outlaw { id: object::new(ctx) };
+
+        capsule::create_<Outlaw_Sky, Royalty_Market, Outlaw>(
+            Outlaw_Sky {}, outlaw, tx_context::sender(ctx), ctx);
+    }
+
+    public fun extend<T: store>(outlaw: &mut Outlaw): (&mut UID) {
+        &mut outlaw.id
     }
 }
 
 module sui_playground::capsule {
-    use sui::object::UID;
-    use sui::dynamic_field;
+    use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::Transfer;
+    use sui::transfer;
+    use sui_playground::ownership::{Self};
+    use sui_playground::module_authority;
 
     const ENOT_OWNER: u64 = 0;
 
@@ -37,9 +45,8 @@ module sui_playground::capsule {
         transfer::share_object(Capsule { id, contents });
     }
 
-    public fun create_<World: drop, Market: drop, T: store>(
+    public fun create_<World: drop, Transfer: drop, T: store>(
         witness: World,
-        witness2: World,
         contents: T,
         owner: address,
         ctx: &mut TxContext
@@ -47,23 +54,30 @@ module sui_playground::capsule {
         let id = object::new(ctx);
 
         module_authority::bind<World>(&mut id);
-        ownership::bind_owner(witness, &mut id, owner);
-        ownership::bind_transfer_authority<Market>(&mut id);
+        let witness = ownership::bind_owner(witness, &mut id, owner);
+        ownership::bind_transfer_authority<World, Transfer>(witness, &mut id, ctx);
 
-        transfer::share_object(Capsule { id, contents });
+        create(id, contents);
     }
 
     public fun open<T: store>(capsule: &mut Capsule<T>, ctx: &TxContext): (&mut UID, &mut T) {
-        assert!(ownership::is_valid(&capsule.id, tx_context::sender(ctx)), ENOT_OWNER);
+        assert!(ownership::is_valid_owner(&capsule.id, tx_context::sender(ctx)), ENOT_OWNER);
 
         (&mut capsule.id, &mut capsule.contents)
     }
 
-    public fun open_<T: store, Authority: key>(capsule: &mut Capsule<T>, auth: &Authority): (&mut UID, &mut T) {
-        assert!(ownership::is_valid_(&capsule.id, auth), ENOT_OWNER);
+    // When Sui supports optional reference arguments, we might be able to cobine open and open_
+    // into one function.
+    // Note that if the caller wants to use capsule.id as an owner, they should call into
+    // `owner::borrow_ownership()` to change the owner from their auth-object ID to the address
+    // calling into the function
+    public fun open_<T: store, Object: key>(capsule: &mut Capsule<T>, auth: &Object): (&mut UID, &mut T) {
+        assert!(ownership::is_valid_owner_(&capsule.id, auth), ENOT_OWNER);
 
         (&mut capsule.id, &mut capsule.contents)
     }
+
+    // Perhaps we can add an open_and_own function as well? Might be 
 
     public fun extend<T: store>(capsule: &mut Capsule<T>): (&mut UID) {
         &mut capsule.id
@@ -71,6 +85,9 @@ module sui_playground::capsule {
 }
 
 module sui_playground::module_authority {
+    use std::string::String;
+    use std::option::{Self, Option};
+    use sui::object::UID;
     use sui::dynamic_field;
     use noot_utils::encode;
     
@@ -80,243 +97,212 @@ module sui_playground::module_authority {
     struct Key has store, copy, drop {}
 
     // Note that modules can bind authority to a witness type without actually being able to produce
-    // that witness time; this effectively allows them to 'send' authority of their own types to
-    // another module
-    public fun bind<Witness: drop>(id: &mut UID) {
-        let type_name = encode::type_name<Witness>();
-        dynamic_field::add(id, Key {}, witness_type);
+    // that witness type; this effectively allows modules to create objects, and then 'delegate' the
+    // authority of that object to another module entirely 
+    public fun bind<World: drop>(id: &mut UID) {
+        dynamic_field::add(id, Key {}, encode::type_name<World>());
     }
 
-    public fun unbind<Witness: drop>(_witness: Witness, id: &mut UID) {
-        assert!(is_authority<Witness>(id), ENO_AUTHORITY);
+    public fun unbind<World: drop>(_witness: World, id: &mut UID) {
+        assert!(is_valid<World>(id), ENO_AUTHORITY);
         dynamic_field::remove<Key, String>(id, Key {});
     }
 
-    public fun into_witness_type(id: &UID): String {
-        *dynamic_field::borrow<Key, String>(id, Key {});
+    public fun into_module_type(id: &UID): Option<String> {
+        if (dynamic_field::exists_(id, Key {})) {
+            option::some(*dynamic_field::borrow<Key, String>(id, Key {}))
+        } else {
+            option::none()
+        }
     }
 
-    public fun is_authority<Witness>(id: &UID): bool {
-        encode::type_name<Witness>() == into_witness_type(id)
+    // Returns false if no module is bound
+    public fun is_valid<World: drop>(id: &UID): bool {
+        let module_maybe = into_module_type(id);
+
+        if (option::is_none(&module_maybe)) { 
+            false
+        } else {
+            encode::type_name<World>() == option::destroy_some(module_maybe)
+        }
     }
 }
 
 module sui_playground::ownership {
-    use std::vector;
+    use std::option::{Self, Option};
+    use std::string::String;
+    use sui::object::{Self, ID, UID};
+    use sui::dynamic_field;
+    use sui::tx_context::{Self, TxContext};
+    use sui_playground::module_authority;
+    use noot_utils::encode;
 
     // error enums
     const ENO_MODULE_AUTHORITY: u64 = 0;
     const ENOT_OWNER: u64 = 1;
-    const ENO_MARKET_AUTHORITY: u64 = 2;
-    const EHIGHER_OFFER_REQUIRED: u64 = 3;
+    const EOWNER_ALREADY_SET: u64 = 2;
+    const ENO_TRANSFER_AUTHORITY: u64 = 3;
+    const EMISMATCHED_HOT_POTATO: u64 = 4;
 
     struct Key has store, copy, drop { slot: u8 }
 
     // Slots for Key
-    const TRANSFER: u8 = 0;
-    const OWNER: u8 = 1;
-    const OFFER: u8 = 2;
-    const OFFER_INFO: u8 = 3;
-    const LIEN_INFO: u8 = 4;
+    const OWNER: u8 = 1; // address
+    const TRANSFER: u8 = 0; // string referencing a witness type
 
-    struct OwnerAuth<phantom Market> has store { owner: address }
-
-    struct OfferInfo has store, drop {
-        coin_type: String,
-        price: u64,
-        pay_to: address
+    // Used to borrow and return ownership. capsule_id ensures you cannot mismatch HotPotato's
+    // and capsules, and obj_addr is the address of the original authority object
+    struct HotPotato { 
+        capsule_id: ID, 
+        original_addr: Option<address> 
     }
 
-    struct LienInfo has store, drop {
-        coin_type: String,
-        amount: u64,
-        pay_to: address
+    // ======= Ownership Authority =======
+
+    // Bind ownership to an arbitrary address
+    // Requires module authority. Only works if no owner is currently set
+    public fun bind_owner<World: drop>(witness: World, id: &mut UID, addr: address): World {
+        assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
+        assert!(!dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_ALREADY_SET);
+
+        dynamic_field::add(id, Key { slot: OWNER}, addr);
+
+        witness
     }
 
-    // Requires module permission. Only works if no owner is currently set
-    public fun bind_owner<Witness: drop>(_witness: Witness, id: &mut UID, addr: address) {
-        assert!(module_authority::is_authority<Witness>(id), ENO_MODULE_AUTHORITY);
+    // Bind ownership to an arbitrary authority object
+    public fun bind_owner_<World: drop, Object: key>(witness: World, id: &mut UID, auth: &Object): World {
+        bind_owner(witness, id, object::id_address(auth))
+    }
 
-        if (!dynamic_field::exists_with_type<Key, address>(id, Key { slot: OWNER })) {
-            dynamic_field::add(id, Key { slot: OWNER}, addr);
+    // Takes a capsule id, and if the authority object is valid, it changes the owner to be the
+    // sender of this transaction. Returns a hot potato to make sure the ownership is set back to
+    // the original authority object by calling `return_ownership()`
+    public fun borrow_ownership<Object: key>(id: &mut UID, auth: &Object, ctx: &TxContext): HotPotato {
+        assert!(is_valid_owner_(id, auth), ENOT_OWNER);
+
+        let key = Key { slot: OWNER };
+
+        let original_addr = if (dynamic_field::exists_(id, key)) {
+            option::some(dynamic_field::remove<Key, address>(id, key))
+        } else { 
+            option::none()
         };
+
+        dynamic_field::add(id, key, tx_context::sender(ctx));
+
+        HotPotato { 
+            capsule_id: object::uid_to_inner(id),
+            original_addr
+        }
     }
 
-    // Requires module permission. Requires owner permission if a transfer authority is already set
-    public fun bind_transfer_authority<Witness: drop, Transfer: drop>(
-        _witness: Witness,
-        id: &mut UID,
-        ctx: &TxContext
-    ) {
-        assert!(module_authority::is_authority<Witness>(id), ENO_MODULE_AUTHORITY);
-        assert!(is_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
+    public fun return_ownership(id: &mut UID, hot_potato: HotPotato) {
+        let HotPotato { capsule_id, original_addr } = hot_potato;
 
-        let transfer_witness = encode::type_name<Transfer>();
-        let key = Key { slot: TRANSFER };
+        assert!(object::uid_to_inner(id) == capsule_id, EMISMATCHED_HOT_POTATO);
 
-        if (dynamic_field::exists_with_type<Key, vector<String>>(id, key)) {
-            let witness_list = dynamic_field::borrow_mut(id, key);
-            
-            // No need to add this witness type again if it's already been added
-            let (exists, i) = vector::index_of(witness_list, witness_type);
-            if (!exists) {
-                vector::push_back(witness_list, transfer_witness); 
-            };
+        if (option::is_some(&original_addr)) {
+            let addr = option::destroy_some(original_addr);
+            *dynamic_field::borrow_mut<Key, address>(id, Key { slot: OWNER }) = addr;
         } else {
-            dynamic_field::add(id, key, vector[transfer_witness]);
+            dynamic_field::remove<Key, address>(id, Key { slot: OWNER});
         };
     }
 
-    // Requires both module and owner permission
-    public fun unbind_transfer_module<Witness: drop, Transfer: drop>(_witness: Witness, id: &mut UID, ctx: &TxContext) {
-        assert!(module_authority::is_authority<Witness>(id), ENO_MODULE_AUTHORITY);
-        assert!(is_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
-
-        let key = Key { slot: TRANSFER };
-
-        if (dynamic_field::exists_with_type<Key, vector<String>>(id, key)) {
-            let witness_list = dynamic_field::borrow_mut(id, key);
-
-            let (exists, i) = vector::index_of(witness_list, encode::type_name<Transfer>());
-            if (exists) {
-                vector::remove(witness_list, i);
-            }
-        }
-    }
-
-    public fun into_transfer_witnesses(id: &UID): vector<String> {
-        let key = Key { slot: TRANSFER };
-
-        if (dynamic_field::exists_with_type<Key, vector<String>>(id, key)) {
-            *dynamic_field::borrow<Key, vector<String>>(id, key)
-        }
-        else {
-            vector::empty<String>()
-        }
-    }
-
-    public fun is_valid_transfer_witness<Transfer: drop>(id: &UID): bool {
-        let key = Key { slot: TRANSFER };
-
-        if (dynamic_field::exists_with_type<Key, vector<String>>(id, key)) {
-            let witness_list = dynamic_field::borrow<Key, vector<String>>(id, key);
-            let (exists, i) = vector::index_of(witness_list, encode::type_name<Transfer>());
-            exists
+    public fun into_owner_address(id: &UID): Option<address> {
+        if (dynamic_field::exists_(id, Key { slot: OWNER })) {
+            option::some(*dynamic_field::borrow(id, Key { slot: OWNER}))
         } else {
-            false
+            option::none()
         }
     }
 
-    public fun initialize<M: drop>(id: &mut UID, owner: address) {
-        dynamic_field::add(id, Key { slot: OWNER }, OwnerAuth<M> { owner });
-    }
-
-    public fun add_offer<C, Market: drop, SellOffer: store, drop>(_witness: Market, id: &mut UID, price: u64, sell_offer: SellOffer, ctx: &Txcontext) {
-        assert!(is_market_witness<Market>(id), ENO_MARKET_AUTHORITY);
-        assert!(is_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
-
-        // In the future we want to be able to drop this without specifying the type;
-        // this doesn't work right unless you can just drop whatever sort of SellOffer is being
-        if (dynamic_field::exists_with_type<Key, SellOffer>(id, Key { slot: OFFER })) {
-            dynamic_field::remove<Key, SellOffer>(id, Key { slot: OFFER });
-            dynamic_field::remove<Key, SellOffer>(id, Key { slot: OFFER });
+    public fun is_valid_owner(id: &UID, addr: address): bool {
+        if (!dynamic_field::exists_(id, Key { slot: OWNER})) { 
+            return true 
         };
 
-        let offer_info = OfferInfo {
-            coin_type: encode::type_name<C>,
-            price
-        };
-        dynamic_field::add(id, Key { slot: OFFER }, sell_offer);
-        dynamic_field::add(id, Key { slot: OFFER_INFO }, offer_info);
-
-        // Ensure the listing can pay back any existing lien
-        assert!(is_lien_and_offer_compatible(id), EOFFER_INCOMPATIBLE_WITH_EXISTING_LIEN);
-    }
-
-    public fun remove_offer<M: drop, SellOffer: store, drop>(_witness: M, id: &mut UID): SellOffer {
-        assert!(is_market_witness<M>(id), ENO_MARKET_AUTHORITY);
-        dynamic_field::remove<Key, SellOffer>(id, Key { slot: OFFER })
-    }
-
-    // Fails if a lien already exists
-    // Witness is the witness-authority that can be used later to remove the lien
-    public fun add_lien<Witness: drop, C, Lien: store>(id: &mut UID, amount: u64, pay_to: address ctx: &TxContext) {
-        assert!(is_owner(id, tx_context::sender(ctx)));
-
-        let lien_info = LienInfo {
-            witness_type: encode::type_name<Witness>,
-            coin_type: encode::type_name<C>(),
-            amount,
-            pay_to
-        };
-        dynamic_field::add(id, Key { slot: LEIN_INFO }, lien_info);
-
-        // Check to see if the sell offer is sufficient
-
-    }
-
-    public fun remove_lien<Witness: drop, C, Lien: store>(_witness: Witness, id: &mut UID): Lien {
-        let lien_info = dynamic_field::remove<Key, LienInfo>(id, Key { slot: LIEN_INFO });
-        let LienInfo { witness_type, coin: _, amount: _ };
-
-        assert!(witness_type == encode::type_name<Witness>(), EINCORRECT_WITNESS);
-
-        dynamic_field::remove<Key, Lien>(id, Key { slot: LIEN })
-    }
-
-    fun remove_lien_internal<Lien>(id: &mut UID): Lien {
-        dynamic_field::remove<Key, LienInfo>(id, Key { slot: LIEN_INFO });
-        dynamic_field::remove<Key, Lien>(id, Key { slot: LIEN })
-    }
-
-    public fun payback_lien<C>(id: &mut UID, coin: Coin<C>) {
-        remove_lien_id()
-    }
-
-    public fun transfer<M: drop>(_witness: M, id: &mut UID, new_owner: address) {
-        let owner_auth = dynamic_field::borrow_mut<Key, OwnerAuth<M>>(id, Key { slot: OWNER });
-        owner_auth.owner = new_owner;
-    }
-
-    // public fun fulfill_market_badass(id: &mut UID, coin: Coin<SUI>) {
-    // }
-
-    public fun into_lien_amount(id: &UID): (String, u64) {
-        let lien_info = dynamic_field::borrow<Key, LienInfo>(id, Key { slot: LIEN_INFO });
-        (lien_info.coin_type, lien_info.amount )
-    }
-
-    public fun into_offer_amount(id: &UID): (String, u64) {
-        let offer_info = dynamic_field::borrow<Key, OfferInfo>(id, Key { slot: OFFER_INFO });
-        (offer_info.coin_type, offer_info.amount )
-    }
-
-    // ============ Checking Functions ===============
-
-    public fun is_lien_and_offer_compatible(id: &UID): bool {
-        if (lien_exists(id) && offer_exists(id)) {
-            let (coin_type1, amount) = into_lien_amount(id);
-            let (coin_type2, price) = into_offer(id);
-            (coin_type1 == coin_type2) && (price >= amount)
-        } else {
-            true
-        }
-    }
-
-    // In the future, be able to answer this without specifying the value
-    public fun lien_exists(id: &UID): bool {
-        dynamic_field::exists_with_type<Key, LienInfo>(id, Key { slot: LIEN_INFO })
-    }
-
-    public fun offer_exists(id: &UID): bool {
-        dynamic_field::exists_with_type<Key, OfferInfo>(id, Key { slot: OFFER_INFO })
-    }
-
-    public fun is_market_witness<M: drop>(id: &UID): bool {
-        dynamic_field::exists_with_type<OwnerKey, OwnerAuth<M>>(id, OwnerKey {} );
-    }
-
-    public fun is_owner(id: &UID, addr: address): bool {
         addr == *dynamic_field::borrow<Key, address>(id, Key { slot: OWNER })
     }
+
+    public fun is_valid_owner_<Object: key>(id: &UID, auth: &Object): bool {
+        let addr = object::id_address(auth);
+        is_valid_owner(id, addr)
+    }
+
+    // ======= Transfer Authority =======
+
+    // Requires module authority.
+    // Requires owner authority if a transfer authority is already set
+    public fun bind_transfer_authority<World: drop, Transfer: drop>(
+        witness: World,
+        id: &mut UID,
+        ctx: &TxContext
+    ): World {
+        let witness = unbind_transfer_authority(witness, id, ctx);
+        let transfer_witness = encode::type_name<Transfer>();
+
+        dynamic_field::add(id, Key { slot: TRANSFER }, transfer_witness);
+
+        witness
+    }
+
+    // Requires both module and owner authority
+    public fun unbind_transfer_authority<World: drop>(
+        witness: World,
+        id: &mut UID,
+        ctx: &TxContext
+    ): World {
+        assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
+
+        if (dynamic_field::exists_with_type<Key, String>(id, Key { slot: TRANSFER })) {
+            assert!(is_valid_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
+
+            dynamic_field::remove<Key, String>(id, Key { slot: TRANSFER });
+        };
+
+        witness
+    }
+
+    public fun into_transfer_type(id: &UID): Option<String> {
+        let key = Key { slot: TRANSFER };
+
+        if (dynamic_field::exists_with_type<Key, String>(id, key)) {
+            option::some(*dynamic_field::borrow<Key, String>(id, key))
+        }
+        else {
+           option::none()
+        }
+    }
+
+    // If there is no transfer module set, then transfers are not allowed
+    public fun is_valid_transfer_authority<Transfer: drop>(id: &UID): bool {
+        let key = Key { slot: TRANSFER };
+
+        if (!dynamic_field::exists_with_type<Key, String>(id, key)) {
+            false 
+        } else {
+            encode::type_name<Transfer>() == *dynamic_field::borrow<Key, String>(id, key)
+        }
+    }
+
+    // Requires transfer authority.
+    // Does NOT require ownership authority or module authority; meaning the delegated transfer module
+    // can transfer arbitrarily, without the owner being the sender of the transaction. This is useful for
+    // marketplace sales, reclaimers, and collateral-repossession
+    public fun transfer<Transfer: drop>(witness: Transfer, id: &mut UID, new_owner: address): Transfer {
+        assert!(is_valid_transfer_authority<Transfer>(id), ENO_TRANSFER_AUTHORITY);
+
+        let owner = dynamic_field::borrow_mut<Key, address>(id, Key { slot: OWNER });
+        *owner = new_owner;
+
+        witness
+    }
+}
+
+module sui_playground::royalty_market {
+
+    // witness
+    struct Royalty_Market has drop {}
 }

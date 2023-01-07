@@ -1,86 +1,97 @@
+// TO DO: create a validator for witness types as strings or TypeNames?
+// TO DO: once Sui adds the ability for multiple signers per transaction, this will have to be adjusted
+// TO DO: we might be able to add addresses directly using signatures? I.e., submit some bytes + signature
+// from some pubkey, so we treat that as a validation and then add that pubkey to our list of addresses
+
 module sui_playground::tx_authority {
+    use std::hash;
+    use std::type_name;
     use std::vector;
-    use std::string::String;
+    use sui::bcs;
     use sui::tx_context::{Self, TxContext};
     use sui::object;
-    use sui_utils::encode;
+    use sui_utils::vector::slice_vector;
 
     struct TxAuthority has drop {
-        addresses: vector<address>,
-        modules: vector<String>
+        addresses: vector<address>
     }
 
-    public fun create(ctx: &mut TxContext): TxAuthority {
-        let auth = TxAuthority {
-            addresses: vector::empty(),
-            modules: vector::empty()
-        };
-
-        add_address_(&mut auth, ctx);
-        
-        auth
+    public fun begin(ctx: &TxContext): TxAuthority {
+        TxAuthority { addresses: vector[tx_context::sender(ctx)] }
     }
 
-    public fun add_address<Object: key>(object: &Object, auth: &mut TxAuthority) {
-        add_address_internal(object::id_address(object), auth);
+    public fun add_object<T: key>(object: &T, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: *&auth.addresses };
+        add_internal(object::id_address(object), &mut new_auth);
+
+        new_auth
     }
 
-    public fun add_address_(auth: &mut TxAuthority, ctx: &TxContext) {
-        add_address_internal(tx_context::sender(ctx), auth);
+    public fun add_witness<Witness: drop>(_witness: Witness, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: *&auth.addresses };
+        add_internal(type_into_addr<Witness>(), &mut new_auth);
+
+        new_auth
     }
 
-    public fun remove_address<Object: key>(object: &Object, auth: &mut TxAuthority) {
-        let addr = object::id_address(object);
+    public fun add_capability<Capability>(_cap: &Capability, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: *&auth.addresses };
+        add_internal(type_into_addr<Capability>(), &mut new_auth);
 
-        let (exists, i) = vector::index_of(&auth.addresses, &addr);
-        if (exists) { vector::remove(&mut auth.addresses, i); };
+        new_auth
     }
 
-    // Instead of storing the witness type here, we could store the module address itself
-    // We would need a Link in order to prove that, and this would assume modules only ever
-    // use one witness, which is a reasonable assumption
-    public fun add_module<Witness: drop>(_witness: Witness, auth: &mut TxAuthority) {
-        let witness_type = encode::type_name<Witness>();
+    // ========= Validity Checkers =========
 
-        if (!vector::contains(&auth.modules, &witness_type)) {
-            vector::push_back(&mut auth.modules, witness_type);
-        };
-    }
-
-    public fun remove_module<Witness: drop>(auth: &mut TxAuthority) {
-        let witness_type = encode::type_name<Witness>();
-
-        let (exists, i) = vector::index_of(&auth.modules, &witness_type);
-        if (exists) { vector::remove(&mut auth.modules, i); };
-    }
-
-    // ========= Internal Functions =========
-
-    public fun is_valid_address<Object: key>(object: &Object, auth: &TxAuthority): bool {
-        let addr = object::id_address(object);
-        is_valid_address_(addr, auth)
-    }
-
-    public fun is_valid_address_(addr: address, auth: &TxAuthority): bool {
+    public fun is_valid_address(addr: address, auth: &TxAuthority): bool {
         let (exists, _) = vector::index_of(&auth.addresses, &addr);
         exists
     }
 
-    public fun is_valid_module<Witness: drop>(auth: &TxAuthority): bool {
-        let witness_type = encode::type_name<Witness>();
-        is_valid_module_(witness_type, auth)
+    public fun is_valid_object<T: key>(object: &T, auth: &TxAuthority): bool {
+        is_valid_address(object::id_address(object), auth)
     }
 
-    public fun is_valid_module_(witness_type: String, auth: &TxAuthority): bool {
-        let (exists, _) = vector::index_of(&auth.modules, &witness_type);
-        exists
+    public fun is_valid_witness<Witness: drop>(auth: &TxAuthority): bool {
+        is_valid_address(type_into_addr<Witness>(), auth)
+    }
+
+    public fun is_valid_capability<T>(auth: &TxAuthority): bool {
+        is_valid_address(type_into_addr<T>(), auth)
+    }
+
+    public fun type_into_addr<T>(): address {
+        let typename = type_name::get<T>();
+        let typename_bytes = bcs::to_bytes(&typename);
+        let hashed_typename = hash::sha2_256(typename_bytes);
+        let truncated = slice_vector(&hashed_typename, 0, 20);
+        bcs::peel_address(&mut bcs::new(truncated))
     }
 
     // ========= Internal Functions =========
 
-    fun add_address_internal(addr: address, auth: &mut TxAuthority) {
+    fun add_internal(addr: address, auth: &mut TxAuthority) {
         if (!vector::contains(&auth.addresses, &addr)) {
             vector::push_back(&mut auth.addresses, addr);
         };
+    }
+}
+
+#[test_only]
+module sui_playground::tx_authority_test {
+    use sui::test_scenario;
+    use sui_playground::tx_authority;
+
+    struct Witness has drop {}
+
+    #[test]
+    public fun test1() {
+        let scenario = test_scenario::begin(@0x69);
+        let ctx = test_scenario::ctx(&mut scenario);
+        {
+            let auth = tx_authority::create(ctx);
+            tx_authority::add_witness(Witness {}, &auth);
+        };
+        test_scenario::end(scenario);
     }
 }

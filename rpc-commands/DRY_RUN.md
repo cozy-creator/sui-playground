@@ -2,7 +2,7 @@ module: 0xff68a93786651eb0a3025df2601a434d34360673::dry_run::call_me
 
 ### Step 1: Set the txBytes
 
-`export SUI_RPC_NODE='https://fullnode.devnet.sui.io:443'`
+`export SUI_RPC_HOST='https://fullnode.devnet.sui.io:443'`
 
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \

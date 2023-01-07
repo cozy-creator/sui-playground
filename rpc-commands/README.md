@@ -1,4 +1,4 @@
-`export SUI_RPC_NODE='https://gateway.devnet.sui.io:443'`
+`export SUI_RPC_HOST='https://gateway.devnet.sui.io:443'`
 
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \

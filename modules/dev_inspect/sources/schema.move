@@ -41,6 +41,22 @@ module sui_playground::schema {
         });
     }
 
+    // Checks to see if two schemas are compatible, in the sense that any overlapping fields map to the same type
+    public fun is_compatible(schema1_: &Schema, schema2_: &Schema): bool {
+        let schema1 = get(schema1_);
+        let i = 0;
+        while (i < vector::length(&schema1)) {
+            let (key, type1, _) = item(vector::borrow(&schema1, i));
+            let (type2_maybe, _) = find_type_for_key(schema2_, key);
+            if (option::is_some(&type2_maybe)) {
+                let type2 = option::destroy_some(type2_maybe);
+                if (type1 != type2) return false;
+            };
+            i = i + 1;
+        };
+        true
+    }
+
     // ========= Accessor Functions =========
 
     public fun get(schema_: &Schema): vector<Item> {
@@ -55,7 +71,7 @@ module sui_playground::schema {
     // ============ Helper Function ============ 
 
     // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
-    public fun get_key(schema_: &Schema, key: ascii::String): (Option<ascii::String>, Option<bool>) {
+    public fun find_type_for_key(schema_: &Schema, key: ascii::String): (Option<ascii::String>, Option<bool>) {
         let (schema, i) = (&schema_.schema, 0);
         while (i < vector::length(schema)) {
             let item = vector::borrow(schema, i);

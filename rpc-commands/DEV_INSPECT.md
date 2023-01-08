@@ -207,7 +207,7 @@ curl --location --request POST $SUI_RPC_HOST \
 **Rick Setup**
 **First Create a Rick**
 
-sui client call --package 0x11c78cd27c165f9b8910af7307da85ee3d068fea --module rick --function create_rick --args 0x3054e79cf2889c8b7865418de8cff45e7471cc1c --gas-budget 3000
+sui client call --package 0x6c804f584c49da2d82e999c0bda472cfb6327e00 --module rick --function create_rick --args 0x7be11365227351a591c46ac7a744973c0296a854 --gas-budget 3000
 
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -217,11 +217,11 @@ curl --location --request POST $SUI_RPC_HOST \
 "method": "sui_devInspectMoveCall",
 "params": [
 "0x81dc9f2dadfdd28a848177afd8b38b7287f7573e",
-"0x11c78cd27c165f9b8910af7307da85ee3d068fea",
+"0x6c804f584c49da2d82e999c0bda472cfb6327e00",
 "rick",
 "view",
 [],
-["0x182e14fdeff9367d6fb5efdec18075fc7097f409", "0x3054e79cf2889c8b7865418de8cff45e7471cc1c"]
+["0xc53b2a7389f5920a9346693f56d751ae380f5cc3", "0x7be11365227351a591c46ac7a744973c0296a854"]
 ]
 }' | json_pp
 
@@ -229,7 +229,7 @@ outputs something like:
 
                             4, <-- number of items
                            13, <-- length of first item
-                           1, <--  optional: true prefix
+                           1, <--  exists optional
                            82, <-- first ascii character
                            105,
                            99,
@@ -262,6 +262,8 @@ outputs something like:
                            0 <-- does not exist optional
 
 Next to do:
+
+- Store items on-chain using their specified types; this makes things easier for explorers
 
 - use the sui_getDynamicFields
 

@@ -269,3 +269,9 @@ Next to do:
 
 - Try bcs size comparison
 - Does bcs take into account dynamic fields? We'll see
+
+### Malleability tests
+
+sui client call --package 0x1ca681935c5655e97c2297a05d01f2c749ee2c66 --module malleability --function store --args 0xea404678421b0ca6ee3fe050a1883d14a73dfe3b --gas-budget 3000
+
+// 0x0dbfb0b0022dcfcbbdfd3f51e905dd753516b612

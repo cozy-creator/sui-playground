@@ -26,16 +26,24 @@ For reading and writing, module-authority is still required, because only the mo
 
 Capsule Plan:
 
-| Action           | Owner | Module | Transfer |
-| ---------------- | ----- | ------ | -------- |
-| Wrap Asset       | N/A   | N      | N/A      |
-| Change Owner     | N     | N      | Y        |
-| Migrate Module   | Y     | Y      | N        |
-| Migrate Transfer | Y     | N      | Y        |
-| Write Metadata   | Y/N   | Y/N    | N        |
-| Borrow asset     | Y/N   | Y/N    | N        |
-| Borrow mut asset | Y/N   | Y/N    | N        |
-| Unwrap Asset     | Y/N   | Y/N    | Y        |
+| Action                         | Owner | Module | Transfer |
+| ------------------------------ | ----- | ------ | -------- |
+| Write Metadata                 | Y     | Y      | N        |
+| Migrate or Eject Module Auth   | Y     | Y      | N        |
+| Migrate or Eject Transfer Auth | N     | N      | Y        |
+| Transfer                       | N     | N      | Y        |
+| Place Asset in Capsule         | N/A\* | N/A    | N/A      |
+| Borrow asset from Capsule      | Y     | N      | N        |
+| Borrow mut asset from Capsule  | Y     | N      | N        |
+| Remove Asset From Capsule      | N     | N      | Y        |
+
+\*N/A because gaining the asset by value is sufficient permission to be able to wrap it inside of a capsule; no ownership permission is required.
+
+Defaults if not set:
+
+- Ownership defaults to true (anything is permitted)
+- Module defaults to true (anything is permitted)
+- Transfer defaults to false (everything is prohibited)
 
 ## LSO: Local Storage Operator - Diem Throwback
 

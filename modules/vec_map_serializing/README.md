@@ -26,6 +26,7 @@ curl --location --request POST $SUI_RPC_HOST \
 [
 [
 73, <-- length of the whole thing
+
 61,
 64,
 83,
@@ -48,11 +49,13 @@ curl --location --request POST $SUI_RPC_HOST \
 10,
 
 4,
+
 4,
 110,
 97,
 109,
 101,
+
 11,
 80,
 97,
@@ -65,13 +68,16 @@ curl --location --request POST $SUI_RPC_HOST \
 105,
 107,
 97,
+
 3,
 97,
 103,
 101,
+
 2,
 50,
 56,
+
 6,
 103,
 101,
@@ -79,6 +85,7 @@ curl --location --request POST $SUI_RPC_HOST \
 100,
 101,
 114,
+
 4,
 109,
 97,
@@ -236,9 +243,10 @@ curl --location --request POST $SUI_RPC_HOST \
 ### Th 6-thing vec
 
                         [
-                           25,
+                           25, <-- total length of vector
 
-                           6,
+                           6, <-- number of items
+
                            3,
                            49,
                            50,

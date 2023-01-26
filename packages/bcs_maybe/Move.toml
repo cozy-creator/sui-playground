@@ -1,0 +1,10 @@
+[package]
+name = "BCSMaybe"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { git = "https://github.com/0xcapsules/capsules.git", subdir = "packages/sui_utils", rev = "examples/outlaw-sky" }
+
+[addresses]
+sui_playground = "0x0"

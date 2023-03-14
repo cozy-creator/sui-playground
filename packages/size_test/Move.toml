@@ -1,0 +1,9 @@
+[package]
+name = "SizeTest"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+sui_playground = "0xdee163ee7600c00e252b6c099d5999ecbe37aaf7"

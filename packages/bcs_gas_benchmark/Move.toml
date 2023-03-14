@@ -1,0 +1,10 @@
+[package]
+name = "BCSGasBenchmark"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { git = "https://github.com/0xcapsules/capsules.git", subdir = "packages/sui_utils", rev = "master" }
+
+[addresses]
+sui_playground = "0x942f9c95643a061abc9b9febffe34a7b5f256cfb"

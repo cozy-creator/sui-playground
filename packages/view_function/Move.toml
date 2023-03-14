@@ -1,0 +1,9 @@
+[package]
+name = "View Functions"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+sui_playground = "0x0553ffe2781ccb9fe3007ecb255a0063be3f0efe"

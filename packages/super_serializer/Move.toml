@@ -1,0 +1,10 @@
+[package]
+name = "SuperSerializer"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { git = "https://github.com/capsule-craft/capsules.git", subdir = "packages/sui_utils", rev = "master" }
+
+[addresses]
+sui_playground = "0x0"

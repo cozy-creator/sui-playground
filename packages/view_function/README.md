@@ -37,6 +37,6 @@ curl --location --request POST $SUI_RPC_HOST \
 "method": "sui_devInspectTransaction",
 "params": [
 "0xbb81965d327c51d42d1081e5d81909652f05a675",
-"AQECBVP/4ngcy5/jAH7LJVoAY74/Dv4EdmlldwV2aWV3MwAAu4GWXTJ8UdQtEIHl2BkJZS8Fpg=="
+"AQECBVP/4ngcy5/jAH7LJVoAY74/Dv4EdmlldwV2aWV3MwAAu4GWXQ=="
 ]
 }' | json_pp

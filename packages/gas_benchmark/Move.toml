@@ -1,10 +1,9 @@
 [package]
 name = "GasBenchmark"
-version = "0.0.1"
+version = "1.0.0"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "79100a5687881eef489f347629bf5b19e417cc8e" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 
 [addresses]
-openrails =  "0x0"
-sui =  "0000000000000000000000000000000000000002"
+capsules =  "0x0"

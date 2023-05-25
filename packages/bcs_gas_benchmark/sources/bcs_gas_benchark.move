@@ -52,34 +52,25 @@ module sui_playground::bcs_gas_benchmark {
         id: UID
     }
 
-    struct Key has store, copy, drop { slot: ascii::String }
-    struct Key2 has store, copy, drop { slot: string::String}
+    struct Key has store, copy, drop { slot: u8 }
 
-    public entry fun dynamic_field_1(ctx: &mut TxContext) {
+    public entry fun dynamic_field_1(num: u8, ctx: &mut TxContext) {
         let object = Object { id: object::new(ctx) };
         let i = 0u8;
-        while (i < 10) {
+        while (i < num) {
             dynamic_field::add(&mut object.id, i, true);
+            let _ = dynamic_field::borrow<u8, bool>(&object.id, i);
             i = i + 1;
         };
         transfer::transfer(object, tx_context::sender(ctx));
     }
 
-    public entry fun dynamic_field_2(ctx: &mut TxContext) {
+    public entry fun dynamic_field_2(num: u8, ctx: &mut TxContext) {
         let object = Object { id: object::new(ctx) };
         let i = 0u8;
-        while (i < 10) {
-            dynamic_field::add(&mut object.id, Key { slot: ascii::string(vector[i, 0, 0, 0, 0, 0, 0, 0]) }, true);
-            i = i + 1;
-        };
-        transfer::transfer(object, tx_context::sender(ctx));
-    }
-
-    public entry fun dynamic_field_3(ctx: &mut TxContext) {
-        let object = Object { id: object::new(ctx) };
-        let i = 0u8;
-        while (i < 10) {
-            dynamic_field::add(&mut object.id, Key2 { slot: string::utf8(vector[i, 0, 0, 0, 0, 0, 0, 0]) }, true);
+        while (i < num) {
+            dynamic_field::add(&mut object.id, Key { slot: i }, true);
+            let _ = dynamic_field::borrow<Key, bool>(&object.id, Key { slot: i });
             i = i + 1;
         };
         transfer::transfer(object, tx_context::sender(ctx));

@@ -1,10 +1,9 @@
 [package]
-name = "VectorGasBenchmark"
-version = "0.2.0"
+name = "NonStore"
+version = "0.1.0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
-SuiUtils = { git = "https://github.com/0xcapsules/capsules.git", subdir = "packages/sui_utils", rev = "examples/outlaw-sky" }
 
 [addresses]
 sui_playground = "0x0"

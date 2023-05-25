@@ -42,3 +42,15 @@ We can have a full 10 child objects inside of an object for under 1k nanoSUI.
 - devnetNFT: 517 nanoSUI
 - demo factory: 2,514 nanoSUI (1 child object)
 - outlaw-sky demo: 5,118 nanoSUI (9 child objects)
+
+### v0.30 Testnet
+
+- dynamic-field no key (1): 3.73m
+- dynamic-field with key (1): 4.15m
+- dynamic-field no key (20): 30.5m
+- dynamic-field with key (20): 37.9m
+- dynamic-field no key (100): 143.3m
+- dynamic-field with key (100): 184.2m
+
+The key-pattern adds a 29% penalty to creating fields.
+A dynamic-field costs around 1.43m - 1.53m nanoSUI to create
